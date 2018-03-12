@@ -8,7 +8,7 @@
 #The Numerov numerical method allows to solve second order differential
 #equations of the form: Psi''(r) = f(r) Psi(r)
 #This script uses this method to solve the Schrodinger equation for the
-#molecules H_2 or D_2. The potential is radial and the schrodinger equation
+#molecules D_2. The potential is radial and the schrodinger equation
 #is 1D in this case. The goal is to find the vibrational energies of these
 #molecules.
 
@@ -90,26 +90,16 @@ eigen_vectors = np.asarray(eigen_vectors)
 
 r_bohr = r/bohr_to_meter
 
-# code to plot wave functions above potential
+#code to plot wave functions above potential
 # for i in range(0,30):
 #     psi = eigen_vectors[i]
 #     print(psi)
 #     plt.plot(r_bohr, V(r)/electron_charge)
-#     plt.plot(r_bohr, psi/np.linalg.norm(psi)+eigen_values[i])
+#     plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
 #     #print(energies[i])
 # plt.show()
 
 
-
-#def normalize_eigen_vector(eigen_vector, dr=dr):
-#    return eigen_vector/wave_fun_norm(eigen_vector, dr)
-
-#normalize_eigen_vectors = np.vectorize(normalize_eigen_vector)
-#eigen_vectors = normalize_eigen_vectors(eigen_vectors)
-
-
 print(eigen_values)
-#print(eigen_values.size)
-
-print(wave_fun_norm(eigen_vectors[0],dr))
+#print(wave_fun_norm(eigen_vectors[0],dr))
 #print(wave_fun_scalar_prod(eigen_vectors[0], eigen_vectors[10], dr))
