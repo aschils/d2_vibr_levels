@@ -35,7 +35,9 @@ def wave_fun_norm(psi, dr):
     return math.sqrt(wave_fun_scalar_prod(psi, psi, dr))
 
 
-pot_file = np.loadtxt("pot_d2+.txt")
+#pot_file = np.loadtxt("pot_d2+.txt")
+pot_file = np.loadtxt("pot_d2_b.txt")
+
 r = pot_file[:,0]*bohr_to_meter
 V = pot_file[:,1]*electron_charge #Joule
 V = interp1d(r,V,kind="linear",fill_value="extrapolate")
@@ -45,14 +47,16 @@ if not min_V_result.success:
     raise Exception("Minimum of potential V not found.")
 r_min_of_V = min_V_result.x
 
-E_max = 13*electron_charge #J
+#E_max = 13*electron_charge #J
+E_max = 2*electron_charge #J
 E_min = V(r_min_of_V)
 
 print("Will search vibrational levels between E_min "+str(E_min/electron_charge)+" and E_max "+str(E_max/electron_charge))
 
 f = lambda x: V(x)-E_max
 V_E_intersect_left = sp.optimize.brentq(f, 0, r_min_of_V)
-V_E_intersect_right = sp.optimize.brentq(f, r_min_of_V,10*r_min_of_V)
+#V_E_intersect_right = sp.optimize.brentq(f, r_min_of_V,10*r_min_of_V)
+V_E_intersect_right = 10*bohr_to_meter
 
 #De Broglie wavelength
 wavelength = h/math.sqrt(2*m*E_max)
@@ -91,13 +95,15 @@ eigen_vectors = np.asarray(eigen_vectors)
 r_bohr = r/bohr_to_meter
 
 #code to plot wave functions above potential
-# for i in range(0,30):
-#     psi = eigen_vectors[i]
-#     print(psi)
-#     plt.plot(r_bohr, V(r)/electron_charge)
-#     plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
-#     #print(energies[i])
-# plt.show()
+for i in range(0,30):
+    if i%5 == 0:
+        psi = eigen_vectors[i]
+        #print(psi)
+        plt.plot(r_bohr, V(r)/electron_charge)
+        #plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
+        plt.plot(r_bohr, psi/np.linalg.norm(psi)+eigen_values[i])
+    #print(energies[i])
+plt.show()
 
 
 print(eigen_values)
