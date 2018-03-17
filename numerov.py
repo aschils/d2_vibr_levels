@@ -177,9 +177,11 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E):
     return eigen_vectors_free[i]
 
 def ker(bound_vib_level_distrib, eigen_values_bound,
-eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound, E):
+eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
+r_bohr_free, E):
 
     p_E = 0
+    dr_bound = r_bohr_bound[1]-r_bohr_bound[0]
 
     for ev_b_idx in range(0, eigen_values_bound.size):
 
@@ -195,8 +197,21 @@ eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound, E):
         eigen_vectors_free, E)
         #Transition probability = scalar product between initial and
         #final states
-        trans_proba = wave_fun_scalar_prod_from_fun(final_free_state, e_vec_b,
-        r_bohr_bound[0], r_bohr_bound[-1])**2
+
+        final_free_statef = interp1d(r_bohr_free, final_free_state,
+        kind=0,fill_value="extrapolate")
+        final_free_state = final_free_statef(r_bohr_bound)
+        trans_proba = wave_fun_scalar_prod(e_vec_b, final_free_state, dr_bound)**2
+
+        #trans_proba = wave_fun_scalar_prod_from_fun(final_free_state, e_vec_b,
+        #r_bohr_bound[0], r_bohr_bound[-1])**2
+
+        #eigen_vectors_boundf = interpolate_eigen_vec_array(eigen_vectors_bound, r_bohr_bound)
+
+
+
+
+
         #print("proba_v "+str(proba_v))
         #print("proba_inter_atomic_dist "+str(proba_inter_atomic_dist))
         #print("trans_proba "+str(trans_proba))
@@ -226,8 +241,8 @@ def bound_vib_level_distrib(mol_energy):
 #r_m_bound = r_bohr_bound*bohr_to_meter
 #r_m_free = r_bohr_free*bohr_to_meter
 
-eigen_vectors_boundf = interpolate_eigen_vec_array(eigen_vectors_bound, r_bohr_bound)
-eigen_vectors_freef = interpolate_eigen_vec_array(eigen_vectors_free, r_bohr_free)
+#eigen_vectors_boundf = interpolate_eigen_vec_array(eigen_vectors_bound, r_bohr_bound)
+#eigen_vectors_freef = interpolate_eigen_vec_array(eigen_vectors_free, r_bohr_free)
 
 # eigen_vectors = eigen_vectors_free
 # eigen_values = eigen_values_free
@@ -255,11 +270,15 @@ delta_e = 0.01
 energies = np.linspace(1.5, 4.5, 200)
 delta_e = energies[1]-energies[0]
 I = 0
+i = 0
 for e in energies:
     p_e = ker(bound_vib_level_distrib, eigen_values_bound,
-    eigen_vectors_boundf, eigen_values_free, eigen_vectors_freef, r_bohr_bound, e)
+    eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
+    r_bohr_free, e)
     proba_e.append(p_e)
     I = I+p_e*delta_e
+    print("Progress  "+str(i/e.size)+"%")
+    i = i+1
 
 print(I)
 
