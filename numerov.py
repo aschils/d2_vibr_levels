@@ -80,7 +80,8 @@ def wave_fun_scalar_prod_from_fun(psi1, psi2, r_0, r_e):
 # eigen_vectors: 2D numpry array, eigen_vectors[i] is the Psi_i
 #   eigen_vectors[i][j] is Psi_i(r_j), r_j are the values in t_bohr
 #
-def numerov(pot_file_path, is_bound_potential, E_max, r_end_for_unbound_potential=10):
+def numerov(pot_file_path, is_bound_potential, E_max,
+r_end_for_unbound_potential=10, refine=1):
 
     pot_file = np.loadtxt(pot_file_path)
 
@@ -117,7 +118,7 @@ def numerov(pot_file_path, is_bound_potential, E_max, r_end_for_unbound_potentia
     #De Broglie wavelength
     wavelength = h/math.sqrt(2*m*E_max)
 
-    dr = wavelength/(2.0*math.pi)
+    dr = wavelength/(2.0*math.pi*refine)
     print("Step dr is "+str(dr/bohr_to_meter)+" bohr")
 
     n = round((V_E_intersect_right-V_E_intersect_left)/dr+5)
@@ -230,8 +231,8 @@ r_bohr_free, E):
 
 #E_min 10.8198528842
 
-(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov("pot_d2+.txt", True, 10.9)
-(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov("pot_d2_b.txt", False, 6)
+(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov("pot_d2+.txt", True, 10.9, refine=5)
+(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov("pot_d2_b.txt", False, 6, refine=5)
 
 def bound_vib_level_distrib(mol_energy):
     return 1/eigen_values_bound.size
@@ -266,8 +267,7 @@ def bound_vib_level_distrib(mol_energy):
 
 
 proba_e = []
-delta_e = 0.01
-energies = np.linspace(1.5, 4.5, 200)
+energies = np.linspace(0, 10, 200)
 delta_e = energies[1]-energies[0]
 I = 0
 i = 0
@@ -277,7 +277,7 @@ for e in energies:
     r_bohr_free, e)
     proba_e.append(p_e)
     I = I+p_e*delta_e
-    print("Progress  "+str(i/e.size)+"%")
+    print("Progress  "+str(i/energies.size*100)+"%")
     i = i+1
 
 print(I)
