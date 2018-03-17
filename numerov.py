@@ -31,8 +31,31 @@ bohr_to_meter = 5.291772*10**-11
 def wave_fun_scalar_prod(psi1, psi2, dr):
     return np.dot(psi1,psi2)*dr
 
+def normalize_continuum_wave_fun(psi, energy, r):
+    mu = m_p #masse raduite = masse deuterium/2 = mp
+    k = math.sqrt(2*mu*energy)/hbar
+    s = math.sin(k*r[-1])
+    c = math.cos(k*r[-1])
+    sd = k*c
+    cd = -k*s
+
+    dr = r[1]-r[0]
+    F = psi[-1]
+    Fd = (3*psi[-1]-4*psi[-2]+psi[-3])/(2*dr)
+
+    A = (F*sd-Fd*s)/(c*sd-cd*s)
+    B = (F*cd-Fd*c)/(s*cd-sd*c)
+
+    psi_normalized = psi/math.sqrt((A**2+B**2)*math.pi*k)
+    return psi_normalized
+
 def wave_fun_norm(psi, dr):
     return math.sqrt(wave_fun_scalar_prod(psi, psi, dr))
+
+def wave_fun_scalar_prod_from_fun(psi1, psi2, r_0, r_e):
+    f = lambda r: psi1(r)*psi2(r)
+    i, abserr = sp.integrate.quad(f, r_0, r_e,limit=200)
+    return i
 
 #
 # @Preconditions:
@@ -77,6 +100,8 @@ def numerov(pot_file_path, is_bound_potential, E_max, r_end_for_unbound_potentia
         E_min = V(r_inf)
         r_min_of_V = r_inf
 
+    print("E_min "+str(E_min/electron_charge))
+
     E_max = E_max*electron_charge #Joule
 
     print("Will search vibrational levels between E_min "+str(E_min/electron_charge)+" and E_max "+str(E_max/electron_charge))
@@ -115,38 +140,131 @@ def numerov(pot_file_path, is_bound_potential, E_max, r_end_for_unbound_potentia
     H = KE + sp.sparse.diags(V(r), offsets=0)
     eigen_values, eigen_vectors = np.linalg.eig(H)
 
-    eigen_values = eigen_values/electron_charge
     eigen_values_sorted_idx = np.argsort(eigen_values)
     eigen_values = np.asarray(list(eigen_values[i] for i in eigen_values_sorted_idx))
 
     eigen_vectors = eigen_vectors.T
     eigen_vectors_temp = np.asarray(list(eigen_vectors[i] for i in eigen_values_sorted_idx))
     eigen_vectors = []
+
+    c = 0
     for ev_fat in eigen_vectors_temp:
         ev = ev_fat[0]
-        eigen_vectors.append(ev/wave_fun_norm(ev, dr))
+        if is_bound_potential:
+        #if True:
+            eigen_vectors.append(ev/wave_fun_norm(ev, dr))
+        else:
+            eigen_vectors.append(normalize_continuum_wave_fun(ev, eigen_values[c], r))
+        c = c+1
+
     eigen_vectors = np.asarray(eigen_vectors)
+
+    eigen_values = eigen_values/electron_charge
 
     r_bohr = r/bohr_to_meter
 
     return (r_bohr, V, eigen_values, eigen_vectors)
 
-(r_bohr, V, eigen_values, eigen_vectors) = numerov("pot_d2_b.txt", False, 2)
-(r_bohr, V, eigen_values, eigen_vectors) = numerov("pot_d2+.txt", True, 13)
+def interpolate_eigen_vec_array(ev_array, r):
+    ev_fun = []
+    for i in range(0,r.size):
+        fun = interp1d(r,ev_array[i],kind=0,fill_value="extrapolate")
+        ev_fun.append(fun)
+    return ev_fun
+
+def final_dissoc_state(eigen_values_free, eigen_vectors_free, E):
+    i = np.abs(eigen_values_free-E).argmin()
+    return eigen_vectors_free[i]
+
+def ker(bound_vib_level_distrib, eigen_values_bound,
+eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound, E):
+
+    p_E = 0
+
+    for ev_b_idx in range(0, eigen_values_bound.size):
+
+        e_val_b = eigen_values_bound[ev_b_idx]
+        e_vec_b = eigen_vectors_bound[ev_b_idx]
+        #Proba to be in vibrational bound state v
+        proba_v = bound_vib_level_distrib(e_val_b)
+        #proba_inter_atomic_dist = e_vec_b(r_bohr)**2
+
+        #Find dissociated state from the inter-atomic distance in the
+        #bound state
+        final_free_state = final_dissoc_state(eigen_values_free,
+        eigen_vectors_free, E)
+        #Transition probability = scalar product between initial and
+        #final states
+        trans_proba = wave_fun_scalar_prod_from_fun(final_free_state, e_vec_b,
+        r_bohr_bound[0], r_bohr_bound[-1])**2
+        #print("proba_v "+str(proba_v))
+        #print("proba_inter_atomic_dist "+str(proba_inter_atomic_dist))
+        #print("trans_proba "+str(trans_proba))
+        #proba_to_dissociate_from_r = proba_to_dissociate_from_r
+        #+proba_v*proba_inter_atomic_dist*trans_proba
+        p_E = p_E+proba_v*trans_proba
+
+    print("proba_to_dissociate_E "+str(p_E))
+    return p_E
 
 
-#code to plot wave functions above potential
-for i in range(0,30):
-    if i%5 == 0:
-        psi = eigen_vectors[i]
-        #print(psi)
-        r = r_bohr*bohr_to_meter
-        plt.plot(r_bohr, V(r)/electron_charge)
-        #plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
-        plt.plot(r_bohr, psi/np.linalg.norm(psi)+eigen_values[i])
-    #print(energies[i])
+# (r_bohr, V, eigen_values, eigen_vectors) = numerov("pot_d2_b.txt", False, 2)
+# (r_bohr, V, eigen_values, eigen_vectors) = numerov("pot_d2+.txt", True, 13)
+#
+#
+
+#E_min 10.8198528842
+
+(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov("pot_d2+.txt", True, 10.9)
+(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov("pot_d2_b.txt", False, 6)
+
+def bound_vib_level_distrib(mol_energy):
+    return 1/eigen_values_bound.size
+
+
+
+#r_m_bound = r_bohr_bound*bohr_to_meter
+#r_m_free = r_bohr_free*bohr_to_meter
+
+eigen_vectors_boundf = interpolate_eigen_vec_array(eigen_vectors_bound, r_bohr_bound)
+eigen_vectors_freef = interpolate_eigen_vec_array(eigen_vectors_free, r_bohr_free)
+
+# eigen_vectors = eigen_vectors_free
+# eigen_values = eigen_values_free
+# r_bohr = r_bohr_free
+# V = V_free
+# #code to plot wave functions above potential
+# for i in range(0,eigen_values.size):
+#     if i%10==0:
+#         psi = eigen_vectors[i]
+#         #print(psi)
+#         r = r_bohr*bohr_to_meter
+#         plt.plot(r_bohr, V(r)/electron_charge)
+#         #plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
+#         plt.plot(r_bohr, psi/np.linalg.norm(psi)+eigen_values[i])
+#     #print(energies[i])
+# plt.show()
+
+
+#print(prob_to_dissociate_from_r(bound_vib_level_distrib, eigen_values_bound,
+#eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound, 3))
+
+
+proba_e = []
+delta_e = 0.01
+energies = np.linspace(1.5, 4.5, 200)
+delta_e = energies[1]-energies[0]
+I = 0
+for e in energies:
+    p_e = ker(bound_vib_level_distrib, eigen_values_bound,
+    eigen_vectors_boundf, eigen_values_free, eigen_vectors_freef, r_bohr_bound, e)
+    proba_e.append(p_e)
+    I = I+p_e*delta_e
+
+print(I)
+
+plt.plot(energies, proba_e)
 plt.show()
-
 
 
 
