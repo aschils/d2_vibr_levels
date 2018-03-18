@@ -136,21 +136,42 @@ r_end_for_unbound_potential=10, refine=1):
     A = (sp.sparse.diags(ones_short, offsets=-1)
     -2*sp.sparse.diags(ones, offsets=0)
     +sp.sparse.diags(ones_short, offsets=1))/dr**2
-    KE = -sp.linalg.inv(B.todense()).dot(A.todense())*hbar**2/(2.0*m)
+
+    A = sp.sparse.csc_matrix(A)
+    B = sp.sparse.csc_matrix(B)
+
+    print("Building Hamiltonian matrix.")
+
+    KE = -sp.sparse.linalg.inv(B).dot(A)*hbar**2/(2.0*m)
 
     H = KE + sp.sparse.diags(V(r), offsets=0)
-    eigen_values, eigen_vectors = np.linalg.eig(H)
+
+    print("Computing eigenvalues and eigenvectors of Hamiltonian.")
+    eigen_values, eigen_vectors = sp.sparse.linalg.eigs(H, k=n-2, which="SM")
+    print("Eigenvalues and eigenvectors of Hamiltonian computed.")
+
+
+    #print(eigen_values/electron_charge)
+
 
     eigen_values_sorted_idx = np.argsort(eigen_values)
     eigen_values = np.asarray(list(eigen_values[i] for i in eigen_values_sorted_idx))
+    eigen_values = np.real(eigen_values)
 
     eigen_vectors = eigen_vectors.T
     eigen_vectors_temp = np.asarray(list(eigen_vectors[i] for i in eigen_values_sorted_idx))
+
+    higher_idx_to_keep = np.abs(eigen_values-E_max).argmin()
+    eigen_values = np.delete(eigen_values, np.arange(higher_idx_to_keep, eigen_values.size))
+    eigen_vectors_temp = np.delete(eigen_vectors_temp,
+    np.arange(higher_idx_to_keep, eigen_vectors_temp.size),axis=0)
+
     eigen_vectors = []
 
     c = 0
-    for ev_fat in eigen_vectors_temp:
-        ev = ev_fat[0]
+    for ev in eigen_vectors_temp:
+        #ev = ev_fat[0]
+        ev = np.real(ev)
         if is_bound_potential:
         #if True:
             eigen_vectors.append(ev/wave_fun_norm(ev, dr))
@@ -159,11 +180,12 @@ r_end_for_unbound_potential=10, refine=1):
         c = c+1
 
     eigen_vectors = np.asarray(eigen_vectors)
-
     eigen_values = eigen_values/electron_charge
 
-    r_bohr = r/bohr_to_meter
+    print("Eigenvalues:")
+    print(eigen_values)
 
+    r_bohr = r/bohr_to_meter
     return (r_bohr, V, eigen_values, eigen_vectors)
 
 def interpolate_eigen_vec_array(ev_array, r):
@@ -196,6 +218,7 @@ r_bohr_free, E):
         #bound state
         final_free_state = final_dissoc_state(eigen_values_free,
         eigen_vectors_free, E)
+
         #Transition probability = scalar product between initial and
         #final states
 
@@ -220,7 +243,7 @@ r_bohr_free, E):
         #+proba_v*proba_inter_atomic_dist*trans_proba
         p_E = p_E+proba_v*trans_proba
 
-    print("proba_to_dissociate_E "+str(p_E))
+    #print("proba_to_dissociate_E "+str(p_E))
     return p_E
 
 
@@ -231,13 +254,31 @@ r_bohr_free, E):
 
 #E_min 10.8198528842
 
-(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov("pot_d2+.txt", True, 10.9, refine=5)
-(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov("pot_d2_b.txt", False, 6, refine=5)
+(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov("pot_d2+.txt", True, 13, refine=3)
+(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov("pot_d2_b.txt", False, 10, refine=1)
 
 def bound_vib_level_distrib(mol_energy):
     return 1/eigen_values_bound.size
 
 
+def plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V):
+
+    r = r_bohr*bohr_to_meter
+    plt.plot(r_bohr, V(r)/electron_charge)
+
+    for i in range(0, 100):
+        if i%10 == 0:
+            psi = eigen_vectors[i]
+            #print(eigen_values[i])
+            #print(psi)
+
+            plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
+            #plt.plot(r_bohr, psi/np.linalg.norm(psi)+eigen_values[i])
+        #print(energies[i])
+    plt.show()
+
+#plot_wave_fun(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound)
+#plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free)
 
 #r_m_bound = r_bohr_bound*bohr_to_meter
 #r_m_free = r_bohr_free*bohr_to_meter
@@ -267,17 +308,23 @@ def bound_vib_level_distrib(mol_energy):
 
 
 proba_e = []
-energies = np.linspace(0, 10, 200)
+energies = np.linspace(0, 10, 2000)
 delta_e = energies[1]-energies[0]
 I = 0
 i = 0
+delta_disp = energies.size/100
+disp_count = delta_disp
 for e in energies:
     p_e = ker(bound_vib_level_distrib, eigen_values_bound,
     eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
     r_bohr_free, e)
     proba_e.append(p_e)
     I = I+p_e*delta_e
-    print("Progress  "+str(i/energies.size*100)+"%")
+
+    progress = i/energies.size*100
+    if i / disp_count == 10:
+        print("Progress  "+str(progress)+"%")
+        disp_count = disp_count+delta_disp
     i = i+1
 
 print(I)
