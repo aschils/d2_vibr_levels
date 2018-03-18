@@ -28,6 +28,7 @@ m = 4*m_p #approximation of D_2 mass [kg]
 electron_charge = 1.60217662*10**-19 #coulomb
 bohr_to_meter = 5.291772*10**-11
 
+# <psi1 | psi2> = int_{-\infty}^{\infty} psi1(r)^* psi2(r) dr
 def wave_fun_scalar_prod(psi1, psi2, dr):
     return np.dot(psi1,psi2)*dr
 
@@ -277,35 +278,8 @@ def plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V):
         #print(energies[i])
     plt.show()
 
-#plot_wave_fun(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound)
-#plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free)
-
-#r_m_bound = r_bohr_bound*bohr_to_meter
-#r_m_free = r_bohr_free*bohr_to_meter
-
-#eigen_vectors_boundf = interpolate_eigen_vec_array(eigen_vectors_bound, r_bohr_bound)
-#eigen_vectors_freef = interpolate_eigen_vec_array(eigen_vectors_free, r_bohr_free)
-
-# eigen_vectors = eigen_vectors_free
-# eigen_values = eigen_values_free
-# r_bohr = r_bohr_free
-# V = V_free
-# #code to plot wave functions above potential
-# for i in range(0,eigen_values.size):
-#     if i%10==0:
-#         psi = eigen_vectors[i]
-#         #print(psi)
-#         r = r_bohr*bohr_to_meter
-#         plt.plot(r_bohr, V(r)/electron_charge)
-#         #plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
-#         plt.plot(r_bohr, psi/np.linalg.norm(psi)+eigen_values[i])
-#     #print(energies[i])
-# plt.show()
-
-
-#print(prob_to_dissociate_from_r(bound_vib_level_distrib, eigen_values_bound,
-#eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound, 3))
-
+plot_wave_fun(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound)
+plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free)
 
 proba_e = []
 energies = np.linspace(0, 10, 2000)
@@ -331,11 +305,3 @@ print(I)
 
 plt.plot(energies, proba_e)
 plt.show()
-
-
-
-#
-#
-# print(eigen_values)
-#print(wave_fun_norm(eigen_vectors[0],dr))
-#print(wave_fun_scalar_prod(eigen_vectors[0], eigen_vectors[10], dr))
