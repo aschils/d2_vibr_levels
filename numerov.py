@@ -23,8 +23,8 @@ import matplotlib.pyplot as plt
 h = 6.626*10**-34 #Planck Constant [J s]
 hbar = h/(2*math.pi)
 m_p = 1.672*10**-27 #Proton mass [kg]
-mr_d2 = 4*m_p #approximation of D_2 mass [kg]
-mr_he2 = 2*m_p
+reduced_mass_d2 = 4*m_p #approximation of D_2 reduced mass [kg]
+reduced_mass_he2 = 2*m_p
 
 electron_charge = 1.60217662*10**-19 #coulomb
 bohr_to_meter = 5.291772*10**-11
@@ -69,9 +69,13 @@ def wave_fun_scalar_prod_from_fun(psi1, psi2, r_0, r_e):
 #
 # E_max: search energy levels from potential minimum up to this energy
 #
+# reduced_mass: of molecule in kg
+#
 # r_end_for_unbound_potential: set end of the numerical domain for unbound
 # potential (for bound potential is it the second intersection between the
 # E_max line and the potential V(r))
+#
+# refine: initial step dr will be decreased as dr/refine
 #
 # @Return: (r_bohr, V, eigen_values, eigen_vectors)
 # r_bohr : points of the numerical domain in Bohr (1D numpy array)
@@ -82,7 +86,7 @@ def wave_fun_scalar_prod_from_fun(psi1, psi2, r_0, r_e):
 # eigen_vectors: 2D numpry array, eigen_vectors[i] is the Psi_i
 #   eigen_vectors[i][j] is Psi_i(r_j), r_j are the values in t_bohr
 #
-def numerov(pot_file_path, is_bound_potential, E_max, m,
+def numerov(pot_file_path, is_bound_potential, E_max, reduced_mass,
 r_end_for_unbound_potential=10, refine=1):
 
     pot_file = np.loadtxt(pot_file_path)
@@ -122,7 +126,7 @@ r_end_for_unbound_potential=10, refine=1):
         V_E_intersect_right = r_end_for_unbound_potential*bohr_to_meter
 
     #De Broglie wavelength
-    wavelength = h/math.sqrt(2*m*E_max)
+    wavelength = h/math.sqrt(2*reduced_mass*E_max)
 
     dr = wavelength/(2.0*math.pi*refine)
     print("Step dr is "+str(dr/bohr_to_meter)+" bohr")
@@ -148,7 +152,7 @@ r_end_for_unbound_potential=10, refine=1):
 
     print("Building Hamiltonian matrix.")
 
-    KE = -sp.sparse.linalg.inv(B).dot(A)*hbar**2/(2.0*m)
+    KE = -sp.sparse.linalg.inv(B).dot(A)*hbar**2/(2.0*reduced_mass)
 
     H = KE + sp.sparse.diags(V(r), offsets=0)
 
@@ -202,6 +206,12 @@ def interpolate_eigen_vec_array(ev_array, r):
     return ev_fun
 
 def final_dissoc_state(eigen_values_free, eigen_vectors_free, E):
+
+    delta_E = eigen_values_free[1]-eigen_values_free[0]
+
+    if E < eigen_values_free[0]-delta_E:
+        return np.zeros(eigen_vectors_free[0].size)
+    
     i = np.abs(eigen_values_free-E).argmin()
     return eigen_vectors_free[i]
 
@@ -243,10 +253,6 @@ r_bohr_free, E):
 
         #eigen_vectors_boundf = interpolate_eigen_vec_array(eigen_vectors_bound, r_bohr_bound)
 
-
-
-
-
         #print("proba_v "+str(proba_v))
         #print("proba_inter_atomic_dist "+str(proba_inter_atomic_dist))
         #print("trans_proba "+str(trans_proba))
@@ -257,19 +263,8 @@ r_bohr_free, E):
     #print("proba_to_dissociate_E "+str(p_E))
     return p_E
 
-
-# (r_bohr, V, eigen_values, eigen_vectors) = numerov("pot_d2_b.txt", False, 2)
-# (r_bohr, V, eigen_values, eigen_vectors) = numerov("pot_d2+.txt", True, 13)
-#
-#
-
-#E_min 10.8198528842
-
-#(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov("pot_d2+.txt", True, 13, refine=3)
-#(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov("pot_d2_b.txt", False, 10, refine=1)
-
-def bound_vib_level_distrib(mol_energy):
-    return 1/eigen_values_bound.size
+#def bound_vib_level_distrib(mol_energy):
+#    return 1/eigen_values_bound.size
 
 def under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V, plot_ratio=1):
 
@@ -302,11 +297,12 @@ eigen_vectors_free, eigen_values_free, r_bohr_free, V_free, plot_ratio_bound=1, 
     under_plot_wave_fun(eigen_vectors_free, eigen_values_free+V_free_shift, r_bohr_free, V_free_shifted, plot_ratio_free)
     plt.show()
 
-(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov("pot_rag_free.txt", False, 3, mr_he2, refine=3)
-(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov("pot_rag.txt", True, 2.3, mr_he2, refine=7)
-
-plot_bound_and_free(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound,
-eigen_vectors_free, eigen_values_free, r_bohr_free, V_free,3,10,0.0899*27.2)
+#He2
+# (r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov("pot_rag_free.txt", False, 3, mr_he2, refine=3)
+# (r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov("pot_rag.txt", True, 2.3, mr_he2, refine=7)
+#
+# plot_bound_and_free(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound,
+# eigen_vectors_free, eigen_values_free, r_bohr_free, V_free,3,10,0.0899*27.2)
 
 #eigen_values_free_cm = eigen_values_free*8065.54429
 
@@ -340,34 +336,78 @@ eigen_vectors_free, eigen_values_free, r_bohr_free, V_free,3,10,0.0899*27.2)
 # print(article_cm)
 # print(eigen_values_free_cm)
 
-#
-# plot_wave_fun(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound)
-# plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free)
-#
-# proba_e = []
-# energies = np.linspace(0, 10, 2000)
-# delta_e = energies[1]-energies[0]
-# I = 0
-# i = 0
-# delta_disp = energies.size/100
-# disp_count = delta_disp
-# for e in energies:
-#     p_e = ker(bound_vib_level_distrib, eigen_values_bound,
-#     eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
-#     r_bohr_free, e)
-#     proba_e.append(p_e)
-#     I = I+p_e*delta_e
-#
-#     progress = i/energies.size*100
-#     if i / disp_count == 10:
-#         print("Progress  "+str(progress)+"%")
-#         disp_count = disp_count+delta_disp
-#     i = i+1
-#
-# print(I)
-#
-# plt.plot(energies, proba_e)
-# plt.show()
+#pre: eigen values sorted by increasing energies
+#     eigen_values_bound size is <= 27
+def D2_plus_vib_level_distrib(eigen_values_bound):
+
+    proba_of_levels = np.array([0.080937,
+    0.0996592,
+    0.117558,
+    0.117339,
+    0.109159,
+    0.0917593,
+    0.0799601,
+    0.0670289,
+    0.0498184,
+    0.0420871,
+    0.0310552,
+    0.0230351,
+    0.0206377,
+    0.0139325,
+    0.0117896,
+    0.00925865,
+    0.00724063,
+    0.00603588,
+    0.00578535,
+    0.00419046,
+    0.00285177,
+    0.00245263,
+    0.00167712,
+    0.00132409,
+    0.00161653,
+    0.000861533,
+    0.000948806])
+
+    proba_of_E = lambda E: proba_of_levels[np.abs(eigen_values_bound-E).argmin()]
+    return proba_of_E
+
+
+#E_min 10.8198528842
+
+#Compute bounded stats of D_2+ molecules: wave functions and their energies
+(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov(
+"pot_d2+.txt", True, 12.9, reduced_mass_d2, refine=3)
+#Compute free states of dissociated molecule
+(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov(
+"pot_d2_b.txt", False, 10, reduced_mass_d2, refine=1)
+
+plot_wave_fun(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound)
+plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free)
+
+proba_e = []
+energies = np.linspace(0, 10, 2000)
+delta_e = energies[1]-energies[0]
+normalization = 0
+i = 0
+delta_disp = energies.size/100
+disp_count = delta_disp
+for e in energies:
+    p_e = ker(D2_plus_vib_level_distrib(eigen_values_bound), eigen_values_bound,
+    eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
+    r_bohr_free, e)
+    proba_e.append(p_e)
+    normalization = normalization+p_e*delta_e
+
+    progress = i/energies.size*100
+    if i / disp_count == 10:
+        print("Progress  "+str(progress)+"%")
+        disp_count = disp_count+delta_disp
+    i = i+1
+
+proba_e = proba_e/normalization
+
+plt.plot(energies, proba_e)
+plt.show()
 
 #f1 = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1,1,1])
 #f2 = np.array([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
