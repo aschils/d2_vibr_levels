@@ -29,6 +29,8 @@ reduced_mass_he2 = 2*m_p
 electron_charge = 1.60217662*10**-19 #coulomb
 bohr_to_meter = 5.291772*10**-11
 
+ionisation_potential_d2 = 15.466 #eV
+
 # <psi1 | psi2> = int_{-\infty}^{\infty} psi1(r)^* psi2(r) dr
 def wave_fun_scalar_prod(psi1, psi2, dr):
     return np.dot(psi1,psi2)*dr-dr/2.0*psi1[0]*psi2[0]-dr/2.0*psi1[-1]*psi2[-1]
@@ -210,21 +212,31 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E):
     delta_E = eigen_values_free[1]-eigen_values_free[0]
 
     if E < eigen_values_free[0]-delta_E:
-        return np.zeros(eigen_vectors_free[0].size)
-    
-    i = np.abs(eigen_values_free-E).argmin()
-    return eigen_vectors_free[i]
+        return (0, np.zeros(eigen_vectors_free[0].size))
 
+    i = np.abs(eigen_values_free-E).argmin()
+    return (eigen_values_free[i], eigen_vectors_free[i])
+
+#
+# bound_vib_level_distrib: a function, gives proba for bound molecule to be
+#               in vibrational state of energy E
+# r_bohr_bound: numerov numerical domain used to computed bounded wave functions
+#              solutions of Schrodinger with bound potential (bohr)
+# r_bohr_free: numerov numerical domain used to computed free wave functions
+#              solutions of Schrodinger with unbound potential (bohr)
+# E: energy for which we want p(E), proba to observe kinetic energy E
+# bounded_state_IP: ionisation potential of molecule bounded state in eV
+#
 def ker(bound_vib_level_distrib, eigen_values_bound,
 eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
-r_bohr_free, E):
+r_bohr_free, E, bounded_state_IP):
 
     p_E = 0
     dr_bound = r_bohr_bound[1]-r_bohr_bound[0]
 
     #Find dissociated state from the inter-atomic distance in the
     #bound state
-    final_free_state = final_dissoc_state(eigen_values_free,
+    (E_final_state, final_free_state) = final_dissoc_state(eigen_values_free,
     eigen_vectors_free, E)
     final_free_statef = interp1d(r_bohr_free, final_free_state,
     kind=0,fill_value="extrapolate")
@@ -238,29 +250,15 @@ r_bohr_free, E):
         #Proba to be in vibrational bound state v
         proba_v = bound_vib_level_distrib(e_val_b)
 
-        #proba_inter_atomic_dist = e_vec_b(r_bohr)**2
-
-        #plt.plot()
-
         #Transition probability = scalar product between initial and
         #final states
+        trans_proba_squared = wave_fun_scalar_prod(e_vec_b, final_free_state, dr_bound)**2
 
+        #divide by cosh: remove from probability the fact that you can form a
+        #bounded D2 molecule 1/cosh((E(eV)-E_res)/1.547)^2
+        E_res = e_val_b-bounded_state_IP
+        p_E = p_E+proba_v*trans_proba_squared/math.cosh((E-E_res)/1.547)**2
 
-        trans_proba = wave_fun_scalar_prod(e_vec_b, final_free_state, dr_bound)**2
-
-        #trans_proba = wave_fun_scalar_prod_from_fun(final_free_state, e_vec_b,
-        #r_bohr_bound[0], r_bohr_bound[-1])**2
-
-        #eigen_vectors_boundf = interpolate_eigen_vec_array(eigen_vectors_bound, r_bohr_bound)
-
-        #print("proba_v "+str(proba_v))
-        #print("proba_inter_atomic_dist "+str(proba_inter_atomic_dist))
-        #print("trans_proba "+str(trans_proba))
-        #proba_to_dissociate_from_r = proba_to_dissociate_from_r
-        #+proba_v*proba_inter_atomic_dist*trans_proba
-        p_E = p_E+proba_v*trans_proba
-
-    #print("proba_to_dissociate_E "+str(p_E))
     return p_E
 
 #def bound_vib_level_distrib(mol_energy):
@@ -374,9 +372,12 @@ def D2_plus_vib_level_distrib(eigen_values_bound):
 
 #E_min 10.8198528842
 
+# Set E=11 to have 1 computed bound state
+# Set E=12.9 to have 27 computed bound states
+
 #Compute bounded stats of D_2+ molecules: wave functions and their energies
 (r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov(
-"pot_d2+.txt", True, 12.9, reduced_mass_d2, refine=3)
+"pot_d2+.txt", True, 11, reduced_mass_d2, refine=3)
 #Compute free states of dissociated molecule
 (r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov(
 "pot_d2_b.txt", False, 10, reduced_mass_d2, refine=1)
@@ -394,8 +395,9 @@ disp_count = delta_disp
 for e in energies:
     p_e = ker(D2_plus_vib_level_distrib(eigen_values_bound), eigen_values_bound,
     eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
-    r_bohr_free, e)
+    r_bohr_free, e, ionisation_potential_d2)
     proba_e.append(p_e)
+
     normalization = normalization+p_e*delta_e
 
     progress = i/energies.size*100
@@ -408,6 +410,8 @@ proba_e = proba_e/normalization
 
 plt.plot(energies, proba_e)
 plt.show()
+
+
 
 #f1 = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1,1,1])
 #f2 = np.array([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
