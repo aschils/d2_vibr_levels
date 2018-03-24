@@ -18,7 +18,11 @@ import scipy as sp
 from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
 from scipy.interpolate import interp1d
+import scipy.optimize as optimize
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import pickle
+import concurrent.futures
 
 h = 6.626*10**-34 #Planck Constant [J s]
 hbar = h/(2*math.pi)
@@ -229,7 +233,7 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E):
 #
 def ker(bound_vib_level_distrib, eigen_values_bound,
 eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
-r_bohr_free, E, bounded_state_IP):
+r_bohr_free, E, bounded_state_IP, gamma=1.547):
 
     p_E = 0
     dr_bound = r_bohr_bound[1]-r_bohr_bound[0]
@@ -257,7 +261,7 @@ r_bohr_free, E, bounded_state_IP):
         #divide by cosh: remove from probability the fact that you can form a
         #bounded D2 molecule 1/cosh((E(eV)-E_res)/1.547)^2
         E_res = e_val_b-bounded_state_IP
-        p_E = p_E+proba_v*trans_proba_squared/math.cosh((E-E_res)/1.547)**2
+        p_E = p_E+proba_v*trans_proba_squared/math.cosh((E-E_res)/gamma)**2
 
     return p_E
 
@@ -271,15 +275,9 @@ def under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V, plot_ratio=1):
 
     for i in range(0, len(eigen_vectors)):
         if i%plot_ratio == 0:
-        #if True:
             psi = eigen_vectors[i]
-            #print(eigen_values[i])
-            #print(psi)
-
             #plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
             plt.plot(r_bohr, psi/np.linalg.norm(psi)+eigen_values[i])
-        #print(energies[i])
-    #plt.show()
 
 def plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V, plot_ratio=1):
     V_ev = lambda r: V(r)/electron_charge
@@ -295,7 +293,7 @@ eigen_vectors_free, eigen_values_free, r_bohr_free, V_free, plot_ratio_bound=1, 
     under_plot_wave_fun(eigen_vectors_free, eigen_values_free+V_free_shift, r_bohr_free, V_free_shifted, plot_ratio_free)
     plt.show()
 
-#He2
+#He2 Raghed ###################################################################
 # (r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov("pot_rag_free.txt", False, 3, mr_he2, refine=3)
 # (r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov("pot_rag.txt", True, 2.3, mr_he2, refine=7)
 #
@@ -334,6 +332,9 @@ eigen_vectors_free, eigen_values_free, r_bohr_free, V_free, plot_ratio_bound=1, 
 # print(article_cm)
 # print(eigen_values_free_cm)
 
+#END He2 Raghed ###################################################################
+
+
 #pre: eigen values sorted by increasing energies
 #     eigen_values_bound size is <= 27
 def D2_plus_vib_level_distrib(eigen_values_bound):
@@ -369,50 +370,262 @@ def D2_plus_vib_level_distrib(eigen_values_bound):
     proba_of_E = lambda E: proba_of_levels[np.abs(eigen_values_bound-E).argmin()]
     return proba_of_E
 
-
 #E_min 10.8198528842
 
 # Set E=11 to have 1 computed bound state
 # Set E=12.9 to have 27 computed bound states
 
+E_max_bound_states = 12.9
 #Compute bounded stats of D_2+ molecules: wave functions and their energies
-(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov(
-"pot_d2+.txt", True, 11, reduced_mass_d2, refine=3)
+#(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov(
+#"pot_d2+.txt", True, E_max_bound_states, reduced_mass_d2, refine=3)
 #Compute free states of dissociated molecule
-(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov(
-"pot_d2_b.txt", False, 10, reduced_mass_d2, refine=1)
+#(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov(
+#"pot_d2_b.txt", False, 10, reduced_mass_d2, refine=1)
 
-plot_wave_fun(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound)
-plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free)
+#plot_wave_fun(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound)
+#plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free)
 
-proba_e = []
-energies = np.linspace(0, 10, 2000)
-delta_e = energies[1]-energies[0]
-normalization = 0
-i = 0
-delta_disp = energies.size/100
-disp_count = delta_disp
+# proba_e = []
+# energies = np.linspace(0, 10, 2000)
+# delta_e = energies[1]-energies[0]
+# normalization = 0
+# i = 0
+# delta_disp = energies.size/100
+# disp_count = delta_disp
+# for e in energies:
+#     p_e = ker(D2_plus_vib_level_distrib(eigen_values_bound), eigen_values_bound,
+#     eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
+#     r_bohr_free, e, ionisation_potential_d2)
+#     proba_e.append(p_e)
+#
+#     normalization = normalization+p_e*delta_e
+#
+#     progress = i/energies.size*100
+#     if i / disp_count == 10:
+#         print("Progress  "+str(progress)+"%")
+#         disp_count = disp_count+delta_disp
+#     i = i+1
+# proba_e = proba_e/normalization
+
+#np.set_printoptions(threshold=np.nan)
+
+# ker_out_file = open("ker.txt", "w")
+# for i in range(0, energies.size):
+#     ker_out_file.write(str(energies[i])+" ")
+#     ker_out_file.write(str(proba_e[i])+" ")
+#     ker_out_file.write("\n")
+# ker_out_file.close()
+
+#plt.plot(energies, proba_e)
+#plt.show()
+
+########### In this part will fit exp ker with theo ker #######################
+
+ker_exp_f_path = "d2_ker_distribution.txt"
+ker_exp = np.loadtxt(ker_exp_f_path, skiprows=1)
+#Drop values below 0.2eV and above 7ev
+ker_exp = ker_exp[ker_exp[:,0] >= 0.2]
+ker_exp = ker_exp[ker_exp[:,0] <= 7]
+
+#Avoid to compute numerov at each run
+numerov_save_path = "numerov_save.pkl"
+try:
+    input = open(numerov_save_path, 'rb')
+    numerov_res_bound = pickle.load(input)
+    numerov_res_free = pickle.load(input)
+except:
+    numerov_res_bound = numerov("pot_d2+.txt", True, E_max_bound_states,
+    reduced_mass_d2, refine=3)
+    numerov_res_free = numerov("pot_d2_b.txt", False, 10, reduced_mass_d2, refine=1)
+    try:
+        output = open(numerov_save_path, "wb")
+        pickle.dump(numerov_res_bound, output, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(numerov_res_free, output, pickle.HIGHEST_PROTOCOL)
+    except:
+        print("pickle fail")
+
+
+#
+# ker_exp: 2D numpy array, first column contains energies in eV.
+#           second column contains the number of events with corresponding energy
+# numerov_res_bound: tuple, output of numerov computation for bound molecule
+# numerov_res_free:  tuple, output of numerov computation for unbound state
+# alpha:  coefficient multiplying the theoretical KER
+# gamma: the gamma factor of 1/cosh(.../gamma), factor taking into account
+#        proba to produce the bound molecule (D2 in this case)
+#
+# return: sum of mean squared error, \sum_i=1^N (nbr_event_exp_i-nbr_event_theo_i)^2
+#
+def exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alpha, gamma):
+
+    (r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov_res_bound
+    (r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov_res_free
+
+    energies = ker_exp[:,0]
+    proba_exp = ker_exp[:,1]
+
+    error = 0
+    for i in range(0,proba_exp.size):
+        e = energies[i]
+        proba_theo = alpha*ker(D2_plus_vib_level_distrib(eigen_values_bound),
+        eigen_values_bound, eigen_vectors_bound, eigen_values_free,
+        eigen_vectors_free, r_bohr_bound, r_bohr_free, e, ionisation_potential_d2,gamma)
+        error = error+(proba_exp[i]-proba_theo)**2
+    return error
+
+def exp_theo_error_wrap(tuple_params):
+    (ker_exp, numerov_res_bound, numerov_res_free, alpha, gamma) = tuple_params
+    return exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alpha, gamma)
+
+#f = lambda alpha: exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alpha, 1.5)
+
+#Search bracket alpha
+# alpha = 2300000000
+# delta_alpha = 10**8
+# error = 10**10
+# prev_error = 10**20
+# while prev_error > error:
+#     prev_error = error
+#     error = f(alpha)
+#     alpha = alpha+delta_alpha
+# alpha_right = alpha
+# alpha_left = alpha-2*delta_alpha
+
+
+# error = 10**10
+# prev_error = 10**20
+#
+# while np.abs(error-prev_error) > 1:
+#     prev_error = error
+#     print(prev_error)
+#     alpha = alpha_left+(alpha_right-alpha_left)/2.0
+#     error = f(alpha)
+#     print(error)
+#     error_delta_right = f(alpha+0.5)
+#     error_delta_left = f(alpha-0.5)
+#     if error_delta_left < error_delta_right:
+#         alpha_right = alpha
+#     else:
+#         alpha_left = alpha
+# print(alpha)
+
+#alpha = 2429711914.0625
+
+# gammas = np.linspace(1, 2, 100)
+# errors = []
+# for gamma in gammas:
+#     errors.append(exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alpha, gamma))
+# errors = np.array(errors)
+# i = errors.argmin()
+# print(gammas[i])
+#gamma = 1.55555555556
+
+(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov_res_bound
+(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov_res_free
+
+#Try to fit the curve at best, grid search alpha - gamma
+#gammas = np.linspace(1.35, 2, 20)
+#alphas = np.linspace(1*10**8, 35*10**8, 20)
+
+# gammas = np.linspace(0.5, 4, 100)
+# alphas = np.linspace(10**7, 25*10**8, 100)
+# errors = np.zeros((gammas.size, alphas.size))
+#
+# fig = plt.figure()
+# ax = fig.add_subplot(111, projection='3d')
+#
+# items = []
+# #kept = []
+# for i in range(0,gammas.size):
+#     for j in range(0,alphas.size):
+#         #if not (gammas[i] > 2.0 and alphas[i] > 0.5):
+#         items.append((ker_exp, numerov_res_bound, numerov_res_free, alphas[j], gammas[i]))
+#         #kept.append((i,j))
+#
+# executor = concurrent.futures.ProcessPoolExecutor(4)
+# futures = [executor.submit(exp_theo_error_wrap, item) for item in items]
+# concurrent.futures.wait(futures)
+#
+# for future_idx in range(0,len(futures)):
+#     i = int(future_idx/alphas.size)
+#     j = int(future_idx%alphas.size)
+#     errors[i][j] = futures[future_idx].result()
+#
+# #k = 0
+# #for (i,j) in kept:
+# #    errors[i][j] = futures[k].result()
+# #    k = k+1
+#
+#
+# #for i in range(0,gammas.size):
+# #    for j in range(0,alphas.size):
+# #        errors[i][j] = exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alphas[j], gammas[i])
+#
+# #errors = np.array(errors)
+# flatten_idx = errors.argmin()
+#
+# i = int(flatten_idx/alphas.size)
+# j = int(flatten_idx%alphas.size)
+#
+# print(i)
+# print(j)
+#
+# alpha = alphas[j]
+# gamma = gammas[i]
+#
+# print("minimum error for alpha "+str(alpha)+" and gamma "+str(gamma))
+#
+# ax = fig.add_subplot(111, projection='3d')
+#
+# X, Y = np.meshgrid(alphas, gammas)
+# Z = errors
+#
+# ax.plot_surface(X, Y, Z, color='b')
+#
+# plt.show()
+
+#minimum error for alpha 433030303.03 and gamma 2.24242424242 starting from 0.2eV
+#minimum error for alpha 451951333.367 and gamma 2.21656477901 starting from 0.2ev (scipy)
+#minimum error for alpha 60303030.303 and gamma 3.89393939394 starting from 0.8eV
+#minimum error for alpha 66708983.1675 and gamma 3.74454792294 from 0.8eV (scipy)
+#minimum error for alpha 60303030.303 and gamma 3.82323232323 starting from 1.11eV
+#minimum error for alpha 41688581.6395 and gamma 4.4093264698 from 1.11eV (scipy)
+
+
+######### Optimize with scipy #################
+
+
+def ker_to_fit(energies, alpha, gamma):
+
+    p_e = np.zeros(energies.size)
+    for i in range(0, p_e.size):
+        p_e[i] = alpha*ker(D2_plus_vib_level_distrib(eigen_values_bound), eigen_values_bound,
+        eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
+        r_bohr_free, energies[i], ionisation_potential_d2, gamma)
+
+    return p_e
+
+energies = ker_exp[:,0]
+proba_exp = ker_exp[:,1]
+
+#res = sp.optimize.curve_fit(ker_to_fit, energies, proba_exp, p0=(433030303, 2.24))
+res = sp.optimize.curve_fit(ker_to_fit, energies, proba_exp, p0=(35*10**8, 3))
+
+print(res)
+(alpha, gamma) = res[0]
+
+print("minimum error for alpha "+str(alpha)+" and gamma "+str(gamma))
+print(res[1])
+
+proba_theo = []
 for e in energies:
     p_e = ker(D2_plus_vib_level_distrib(eigen_values_bound), eigen_values_bound,
     eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
-    r_bohr_free, e, ionisation_potential_d2)
-    proba_e.append(p_e)
+    r_bohr_free, e, ionisation_potential_d2, gamma)
+    proba_theo.append(p_e)
+proba_theo = alpha*np.array(proba_theo)
 
-    normalization = normalization+p_e*delta_e
-
-    progress = i/energies.size*100
-    if i / disp_count == 10:
-        print("Progress  "+str(progress)+"%")
-        disp_count = disp_count+delta_disp
-    i = i+1
-
-proba_e = proba_e/normalization
-
-plt.plot(energies, proba_e)
+plt.plot(energies, proba_exp)
+plt.plot(energies, proba_theo)
 plt.show()
-
-
-
-#f1 = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1,1,1])
-#f2 = np.array([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
-#print(wave_fun_scalar_prod(f1, f2, 0.5))
