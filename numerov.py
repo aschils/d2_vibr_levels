@@ -44,6 +44,8 @@ D2STAR_4_1SG_POTENTIAL_FILE = "4_1Sigma_g"
 D2STAR_2_3SU_POTENTIAL_FILE = "2_3Sigma_u"
 D2STAR_3_3SU_POTENTIAL_FILE = "3_3Sigma_u"
 D2STAR_4_3SU_POTENTIAL_FILE = "4_3Sigma_u"
+D2STAR_1PI_U_C_POTENTIAL_FILE = "1Piu_C.txt"
+D2STAR_1PI_U_D_POTENTIAL_FILE = "1Piu_D.txt"
 
 
 EXP_KER_PATH = "data/ker_d2_d.txt"
@@ -134,13 +136,17 @@ D2STAR_3_3SU_NUMEROV_PARAMS = NumerovParams(D2STAR_3_3SU_POTENTIAL_FILE, True,
 0, reduced_mass_d2, 10, refine, True, True)
 D2STAR_4_3SU_NUMEROV_PARAMS = NumerovParams(D2STAR_4_3SU_POTENTIAL_FILE, True,
 0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_1PI_U_C_NUMEROV_PARAMS = NumerovParams(D2STAR_1PI_U_C_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_1PI_U_D_NUMEROV_PARAMS = NumerovParams(D2STAR_1PI_U_D_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
 
 q_r_data = np.loadtxt(Q_R_PATH)
 r = q_r_data[:,0]
 q = q_r_data[:,1]
 q_r = interp1d(r,q,kind="linear",fill_value="extrapolate")
 
-q_r = lambda x: 1
+#q_r = lambda x: 1
 
 def gaussian(a, b, c, x):
     return a*np.exp(-((x-b)/c)**2/2)
@@ -222,31 +228,34 @@ def idx_of_lower_E_max(values, value, percent_less):
         return nearest_of_target_idx+1
 
 #
+# You must pass to this function a NumerovParams object. This object contains
+# all info required to perform Numerov.
+#
 # @Preconditions:
 # First column of pot file is inter-atomic distance in Bohr
-# Second column is the potential in eV
+# Second column is the potential in eV (if in au you can set pot_in_au to True)
 #
-# is_bound_potential must be True if the molecular potential has a minimum,
+# is_bound_potential must be True if the molecular potential has a minimum (potential well),
 # False otherwise
 #
 # E_max: search energy levels from potential minimum up to this energy
+#       (not considered if auto_E_max is set to True)
 #
 # reduced_mass: of molecule in kg
 #
 # r_end_for_unbound_potential: set end of the numerical domain for unbound
-# potential (for bound potential is it the second intersection between the
-# E_max line and the potential V(r))
+# potential
 #
 # refine: initial step dr will be decreased as dr/refine
 #
-# @Return: (r_bohr, V, eigen_values, eigen_vectors)
-# r_bohr : points of the numerical domain in Bohr (1D numpy array)
-# V, a function of r, is the potential in Joule as a function of the interatomic
-# distance r IN METERS
-# eigen_values: a 1D numpy array, energy levels (eigenvalues of Hamiltonian)
+# @Return: NumerovResult object having following attribues:
+# - r_bohr : points of the numerical domain in Bohr (1D numpy array)
+# - V, a function of r, is the potential in eV as a function of the interatomic
+# distance r in bohr
+# - eigen_values: a 1D numpy array, energy levels (eigenvalues of Hamiltonian)
 # in eV, sorted by increasing energy
-# eigen_vectors: 2D numpry array, eigen_vectors[i] is the Psi_i
-#   eigen_vectors[i][j] is Psi_i(r_j), r_j are the values in t_bohr
+# - eigen_vectors: 2D numpry array, eigen_vectors[i] is the Psi_i
+#   eigen_vectors[i][j] is Psi_i(r_j), r_j are the values in r_bohr
 #
 #def numerov(pot_file_path, is_bound_potential, E_max, reduced_mass,
 #r_end_for_unbound_potential=10, refine=1, pot_in_au=False, auto_E_max=True):
@@ -275,48 +284,32 @@ def numerov(NumerovParams):
 
     r_init = pot_file[:,0]
     V_init = pot_file[:,1]
-
     r = r_init*bohr_to_meter
-
     if pot_in_au:
         V_init = V_init*au_to_ev
-
-    #(V_shifted, shift) = shift_neg_potential(V_init)
-    #E_max = E_max+shift
-
-    #V_discr = V_shifted*electron_charge #Joule
     V_discr = V_init*electron_charge #Joule
     V = interp1d(r,V_discr,kind="linear",fill_value="extrapolate")
-    #plt.plot(r,pot_file[:,1])
-    #plt.show()
     r_inf = 10**6 #purely arbitrary
 
     E_max = E_max*electron_charge #Joule
 
     if is_bound_potential:
-
         i_min = np.argmin(V_discr)
         E_min = V_discr[i_min]
         r_min_of_V = r[i_min]
-
         if auto_E_max:
             V_after_min = V_discr[i_min:]
             i_max = np.argmax(V_after_min)+i_min
             E_max = V_discr[i_max]
-            #  0.028646114 et 0.028646113
             percent_below_E_max = 0.028646113 #Taking E_max as real max implies too long computation
             i_max = idx_of_lower_E_max(V_discr, E_max, percent_below_E_max)
             E_max = V_discr[i_max]
-        #threshold = (E_max-E_min)/10
-        #E_max = E_max-threshold
-        #plt.plot(r, V_discr/electron_charge)
-        #plt.show()
     else:
         E_min = V(r_inf)
         r_min_of_V = r_inf
 
-    #print("Will search vibrational levels between E_min "+str(E_min/electron_charge-shift)+ \
-    #" eV and E_max "+str(E_max/electron_charge-shift)+" eV")
+    print("Will search vibrational levels between E_min "+str(E_min/electron_charge)+ \
+    " eV and E_max "+str(E_max/electron_charge)+" eV")
 
     f = lambda x: V(x)-E_max
     V_E_intersect_left = sp.optimize.brentq(f, 0, r_min_of_V)
@@ -326,7 +319,6 @@ def numerov(NumerovParams):
             V_E_intersect_right = r[i_max]
         else:
             V_E_intersect_right = sp.optimize.brentq(f, r_min_of_V,10*r_min_of_V)
-        #print(V_E_intersect_right)
     else:
         V_E_intersect_right = r_end_for_unbound_potential*bohr_to_meter
 
@@ -359,7 +351,6 @@ def numerov(NumerovParams):
     print("Building Hamiltonian matrix.")
 
     KE = -sp.sparse.linalg.inv(B).dot(A)*hbar**2/(2.0*reduced_mass)
-    #H = KE + sp.sparse.diags(V(r), offsets=0)
     H = (KE + sp.sparse.diags(V(r), offsets=0)).todense()
 
     print("Computing eigenvalues and eigenvectors of Hamiltonian.")
@@ -383,7 +374,7 @@ def numerov(NumerovParams):
 
     c = 0
     for ev_fat in eigen_vectors_temp:
-        #ev = np.real(ev)
+        #ev = np.real(ev) #Required using eig for sparce matrix
         ev = ev_fat[0]
         if is_bound_potential:
             eigen_vectors.append(ev/wave_fun_norm(ev, dr))
@@ -401,6 +392,7 @@ def numerov(NumerovParams):
     V = interp1d(r_init,V_init,kind="linear",fill_value="extrapolate")
     res = NumerovResult(r_bohr, V, eigen_values, eigen_vectors)
 
+    #Save Numerov result in cache
     try:
         output = open(numerov_save_path, "wb")
         pickle.dump(res, output, pickle.HIGHEST_PROTOCOL)
@@ -538,10 +530,10 @@ def plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio=1):
 def plot_bound_and_free(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound,
 eigen_vectors_free, eigen_values_free, r_bohr_free, V_free, plot_ratio_bound=1, plot_ratio_free=1,
     V_free_shift=0):
-    V_bound_ev = lambda r: V_bound(r)/electron_charge
+    V_bound_ev = lambda r: V_bound(r)
     under_plot_wave_fun(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound_ev, plot_ratio_bound)
-    V_free_shifted = lambda r: V_free(r)/electron_charge + V_free_shift
-    under_plot_wave_fun(eigen_vectors_free, eigen_values_free+V_free_shift, r_bohr_free, V_free_shifted, plot_ratio_free)
+    V_free_shifted = lambda r: V_free(r)+ V_free_shift
+    under_plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free_shifted, plot_ratio_free)
     plt.show()
 
 #He2 Raghed ###################################################################
@@ -1002,13 +994,30 @@ franck_condon_matrix, Ei_minus_Ef):
 
     ker_of_E = 0
 
+    #states_comb_list = []
+    #val_list = []
+
     for i in range(0,len(eigen_vectors_i)):
         for j in range(0,len(eigen_vectors_f)):
             proba_v = bound_vib_level_distrib(eigen_values_i[i])
             #Sigma of Gaussian such as width at half-height is 0.05eV
             sigma = 0.05/math.sqrt(2*math.log(2))
+
+            #states_comb_list.append((i, j))
+            #val_list.append(proba_v*franck_condon_matrix[i, j]* \
+            #math.exp(-(E-Ei_minus_Ef[i,j])**2/(2*sigma**2))/0.106447)
+
             ker_of_E = ker_of_E + proba_v*franck_condon_matrix[i, j]* \
             math.exp(-(E-Ei_minus_Ef[i,j])**2/(2*sigma**2))/0.106447
+
+    # val_list = np.array(val_list)
+    # max_index = np.argmax(val_list)
+    # print("Max contrib for "+str(states_comb_list[max_index]))
+    # print("proba_v "+str(proba_v))
+    # print("franck_condon_matrix[i, j] "+str(franck_condon_matrix[i, j]))
+    # print("Gaussian "+str(math.exp(-(E-Ei_minus_Ef[i,j])**2/(2*sigma**2))/0.106447))
+    # print("E "+str(E))
+    # print("Ei_minus_Ef[i,j] "+str(Ei_minus_Ef[i,j]))
 
     return ker_of_E
 
@@ -1061,7 +1070,15 @@ energies):
     numerov_res_i = numerov(numerov_params_i)
     numerov_res_f = numerov(numerov_params_f)
 
-    #numerov_res_i.plot()
+    #numerov_res_f.plot()
+
+    # plot_bound_and_free(numerov_res_i.eigen_vectors, numerov_res_i.eigen_values,
+    # numerov_res_i.r_bohr, numerov_res_i.V,
+    # numerov_res_f.eigen_vectors, numerov_res_f.eigen_values,
+    # numerov_res_f.r_bohr, numerov_res_f.V, plot_ratio_bound=1, plot_ratio_free=1,
+    #     V_free_shift=0)
+
+
 
     vib_level_distrib_i = vib_level_distrib_i(numerov_res_i.eigen_values)
 
@@ -1100,18 +1117,18 @@ ker_exp = np.loadtxt(EXP_KER_PATH)
 energies = ker_exp[:,0]
 events_nbr_exp = ker_exp[:,1]
 
-end_states_no_q_r = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*3, "GK1SG"),
-(D2STAR_2_3SG_NUMEROV_PARAMS, 150*3/4, "2_3SG"),
-(D2STAR_3_3SG_NUMEROV_PARAMS, 140, "3_3SG"),
-(D2STAR_1_SU_B_NUMEROV_PARAMS, 125, "1_SU_B"),
-(D2STAR_1_SU_BP_NUMEROV_PARAMS, 450, "1_SU_BP"),
-(D2STAR_1_SU_BPP_NUMEROV_PARAMS, 100, "1_SU_BPP"),
-(D2STAR_2_1SG_NUMEROV_PARAMS, 90, "2_1SG"),
-(D2STAR_3_1SG_NUMEROV_PARAMS, 300, "3_1SG"),
-(D2STAR_4_1SG_NUMEROV_PARAMS, 125, "4_1SG"),
-(D2STAR_2_3SU_NUMEROV_PARAMS, 125*1.5, "2_3SU"),
-(D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
-(D2STAR_4_3SU_NUMEROV_PARAMS, 125, "4_3SU")]
+# end_states_no_q_r = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*3, "GK1SG"),
+# (D2STAR_2_3SG_NUMEROV_PARAMS, 150*3/4, "2_3SG"),
+# (D2STAR_3_3SG_NUMEROV_PARAMS, 140, "3_3SG"),
+# (D2STAR_1_SU_B_NUMEROV_PARAMS, 125, "1_SU_B"),
+# (D2STAR_1_SU_BP_NUMEROV_PARAMS, 450, "1_SU_BP"),
+# (D2STAR_1_SU_BPP_NUMEROV_PARAMS, 100, "1_SU_BPP"),
+# (D2STAR_2_1SG_NUMEROV_PARAMS, 90, "2_1SG"),
+# (D2STAR_3_1SG_NUMEROV_PARAMS, 300, "3_1SG"),
+# (D2STAR_4_1SG_NUMEROV_PARAMS, 125, "4_1SG"),
+# (D2STAR_2_3SU_NUMEROV_PARAMS, 125*1.5, "2_3SU"),
+# (D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
+# (D2STAR_4_3SU_NUMEROV_PARAMS, 125, "4_3SU")]
 
 end_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*2.7, "GK1SG"),
 (D2STAR_2_3SG_NUMEROV_PARAMS, 150*4/5, "2_3SG"),
@@ -1124,15 +1141,34 @@ end_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*2.7, "GK1SG"),
 (D2STAR_4_1SG_NUMEROV_PARAMS, 125*5/6, "4_1SG"),
 (D2STAR_2_3SU_NUMEROV_PARAMS, 125, "2_3SU"),
 (D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
-(D2STAR_4_3SU_NUMEROV_PARAMS, 10, "4_3SU")] #ici j avais mis 0
-
-
-def ker_vec_GK1SG_and_1_SU_BP(energies, a, b, c, alpha1, alpha2, alpha3):
+(D2STAR_4_3SU_NUMEROV_PARAMS, 10, "4_3SU"), #ici j avais mis 0
+(D2STAR_1PI_U_C_NUMEROV_PARAMS,50, "1PI_U_C"),
+(D2STAR_1PI_U_D_NUMEROV_PARAMS,50, "1PI_U_D")]
+#
+# end_states_q_r_quad = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*5/6, "GK1SG"),
+# (D2STAR_2_3SG_NUMEROV_PARAMS, 150*8/15, "2_3SG"),
+# (D2STAR_3_3SG_NUMEROV_PARAMS, 20, "3_3SG"),
+# (D2STAR_1_SU_B_NUMEROV_PARAMS, 125, "1_SU_B"),
+# (D2STAR_1_SU_BP_NUMEROV_PARAMS, 233, "1_SU_BP"),
+# (D2STAR_1_SU_BPP_NUMEROV_PARAMS, 10, "1_SU_BPP"),
+# (D2STAR_2_1SG_NUMEROV_PARAMS, 90, "2_1SG"),
+# #(D2STAR_3_1SG_NUMEROV_PARAMS, 300*1.5*2.7, "3_1SG"),
+# (D2STAR_4_1SG_NUMEROV_PARAMS, 70, "4_1SG"),
+# (D2STAR_2_3SU_NUMEROV_PARAMS, 125*3/4, "2_3SU"),
+# (D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
+# (D2STAR_4_3SU_NUMEROV_PARAMS, 10, "4_3SU"),
+# (D2STAR_1PI_U_C_NUMEROV_PARAMS,50, "1PI_U_C"),
+# (D2STAR_1PI_U_D_NUMEROV_PARAMS,20, "1PI_U_D")]
+#
+#
+def ker_vec_fit(energies, a, b, c, alpha1, alpha2):#, alpha3, alpha4, alpha5):
 
     return gaussian(a, b, c, energies)*( \
     comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_GK1SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha1+ \
-    comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha2 + \
-    comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha3)
+    comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha2)# + \
+    #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha3 + \
+    #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha4 + \
+    #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_4_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha5)
     #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha4)
     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha3 + \
     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_1_SU_B_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha4 + \
@@ -1143,31 +1179,97 @@ def ker_vec_GK1SG_and_1_SU_BP(energies, a, b, c, alpha1, alpha2, alpha3):
     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha9
     #)
 
-#energies_fit_idx = np.logical_and(energies > 1.1, energies < 1.9)
 energies_fit_idx = np.logical_and(energies > 0.5, energies < 2)
-
+# energies_fit_idx = np.logical_and(energies > 0.5, energies < 2)
+#
 energies_fit = energies[energies_fit_idx]
 events_nbr_exp_fit = events_nbr_exp[energies_fit_idx]
 
-res = sp.optimize.curve_fit(ker_vec_GK1SG_and_1_SU_BP, energies_fit, events_nbr_exp_fit, p0=(1, 1.3, 1 , 1,1, 1),
-bounds = (0, math.inf))
-print(res)
-(a, b, c, alpha1, alpha2, alpha3) = res[0]
+#Bound for width at mid height of gaussian 1eV
 
+b_bot_bound = 1.15
+b_up_bound = 1.5
+c_up_bound = 1/math.sqrt(2*math.log(2))
+
+res = sp.optimize.curve_fit(ker_vec_fit, energies_fit,
+events_nbr_exp_fit, p0=(1, 1.3, 0.5, 1, 1),
+bounds = ((0,b_bot_bound,0,0,0), (math.inf,b_up_bound,c_up_bound,math.inf,math.inf))
+)
+
+print(res)
+(a, b, c, alpha1, alpha2) = res[0]
+
+
+def pop_from_coef(energies, numerov_params_list,
+alpha1, alpha2, alpha3=0, alpha4=0, alpha5=0):
+
+    ker = ker_vec_fit(energies, a, b, c, alpha1, alpha2) #alpha3, alpha4, alpha5)
+    alphas = [alpha1, alpha2, alpha3, alpha4, alpha5]
+    ker_fun =interp1d(energies, ker,kind=0,fill_value=0, bounds_error = False)
+
+    I, abserr = sp.integrate.quad(ker_fun, energies[0], energies[-1],limit=20000)
+    pop = []
+
+    for i in range(0, len(numerov_params_list)):
+        ker_component = gaussian(a, b, c, energies)* \
+        comp_ker_vector(D2P_NUMEROV_PARAMS, numerov_params_list[i],
+        D2_plus_vib_level_distrib, energies)*alphas[i]
+        ker_comp_fun =interp1d(energies, ker_component, kind=0, fill_value=0,
+        bounds_error = False)
+        I_i, abserr_i= sp.integrate.quad(ker_comp_fun, energies[0], energies[-1],limit=20000)
+        pop.append(I_i/I)
+    return pop
+
+numerov_params_list = [D2STAR_GK1SG_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS,
+D2STAR_3_3SG_NUMEROV_PARAMS, D2STAR_2_3SU_NUMEROV_PARAMS, D2STAR_4_3SU_NUMEROV_PARAMS]
+
+pop = pop_from_coef(energies, numerov_params_list, alpha1, alpha2)
+#alpha3, alpha4, alpha5)
+
+print("GK1SG "+str(pop[0]))
+print("1_SU_BP "+str(pop[1]))
+print("3_3SG "+str(pop[2]))
+print("2_3SU "+str(pop[3]))
+print("4_3SU "+str(pop[4]))
+
+
+
+
+
+#
 plt.plot(energies, events_nbr_exp)
-plt.plot(energies, ker_vec_GK1SG_and_1_SU_BP(energies, a, b, c, alpha1, alpha2, alpha3))
+plt.plot(energies, ker_vec_fit(energies, a, b, c, alpha1, alpha2))#, alpha3, alpha4, alpha5))
 plt.plot(energies, alpha1*gaussian(a, b, c,energies))
 plt.show()
 
-energy_shift = 0
-plt.plot(energies, events_nbr_exp)
-for (numerov_params, scale_coef, label) in end_states:
-    events_nbr = comp_ker_vector(D2P_NUMEROV_PARAMS,
-    numerov_params, D2_plus_vib_level_distrib,
-    energies)*scale_coef
-    plt.plot(energies+energy_shift, events_nbr, label=label)
-plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
+# energy_shift = 0
+# plt.plot(energies, events_nbr_exp)
+# for (numerov_params, scale_coef, label) in end_states_q_r_quad:
+#     events_nbr = comp_ker_vector(D2P_NUMEROV_PARAMS,
+#     numerov_params, D2_plus_vib_level_distrib,
+#     energies)*scale_coef
+#     plt.plot(energies+energy_shift, events_nbr, label=label)
+# plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
 #
-plt.show()
+# plt.show()
 
-#essayer largeur 1, 2, 3 eV entre 0.7 et 2.7 1/e^2 largeur à mi hauter +/- 1eV 
+#essayer largeur 1, 2, 3 eV entre 0.7 et 2.7 1/e^2 largeur à mi hauter +/- 1eV
+
+
+
+#################### DEBUG ZONE ###################
+# ker_fit = comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS, D2_plus_vib_level_distrib,
+# energies_fit)
+#
+# max_ker_idx = np.argmax(ker_fit)
+# max_ker = ker_fit[max_ker_idx]
+# max_ker_energy = energies_fit[max_ker_idx]
+#
+#
+# print(ker)
+# temp = comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)
+#
+# plt.plot(energies, events_nbr_exp)
+# plt.plot(energies, temp*450)
+# plt.scatter(max_ker_energy, max_ker*450)
+# plt.show()
