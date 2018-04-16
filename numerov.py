@@ -30,7 +30,7 @@ KER_SAVE_FILE = "cache_pkl/computed_ker.pkl"
 Q_R_PATH = "data/q_wrt_r.txt"
 
 POTENTIALS_DIR = "data"
-D2P_POTENTIAL_FILE = "pot_d2+_shifted.txt"
+D2P_POTENTIAL_FILE = "pot_d2+.txt"
 D2DISSOC_POTENTIAL_FILE = "pot_d2_b.txt"
 D2STAR_GK1SG_POTENTIAL_FILE = "gk1sg.dat"
 D2STAR_2_3SG_POTENTIAL_FILE = "2_3Sigma_g_truncat"
@@ -65,6 +65,7 @@ E_max_bound_states_D2p = 12.9-27.211
 E_ground_state_D2p = 11-27.211
 E_two_states_D2p = 11.1-27.211
 E_three_states_D2p = 11.2-27.211
+E_max_bound_states_D2b = 12#0
 
 E_max_bound_states_D2STAR_GK1SG = 1-.663091017*27.211
 E_max_bound_states_D2STAR_2_3SG = 1-.663091017*27.211
@@ -107,11 +108,23 @@ class NumerovResult:
     def plot(self, plot_ratio=1):
         plot_wave_fun(self.eigen_vectors, self.eigen_values, self.r_bohr, self.V, plot_ratio)
 
+    def write_eigen_vector(self, path):
+        of = open(path, "w")
+        for i in range(0, self.r_bohr.size):
+            of.write(str(self.r_bohr[i])+" ")
+            for j in range(0, len(self.eigen_vectors)):
+                of.write(str(self.eigen_vectors[j][i])+" ")
+            of.write("\n")
+        of.close()
+
+
 refine = 2
 #pot_file_path, is_bound_potential, E_max, reduced_mass,
 #r_end_for_unbound_potential=10, refine=1, pot_in_au, auto_E_max
 D2P_NUMEROV_PARAMS = NumerovParams(D2P_POTENTIAL_FILE, True, E_max_bound_states_D2p,
 reduced_mass_d2, 10, refine, False, True)
+D2B_NUMEROV_PARAMS = NumerovParams(D2DISSOC_POTENTIAL_FILE, False, E_max_bound_states_D2b,
+reduced_mass_d2, 10, refine, False, False)
 D2STAR_GK1SG_NUMEROV_PARAMS = NumerovParams(D2STAR_GK1SG_POTENTIAL_FILE, True,
 E_max_bound_states_D2STAR_GK1SG, reduced_mass_d2, 10, refine, True, True)
 D2STAR_2_3SG_NUMEROV_PARAMS = NumerovParams(D2STAR_2_3SG_POTENTIAL_FILE, True,
@@ -156,7 +169,7 @@ def wave_fun_scalar_prod(psi1, psi2, dr):
     return np.dot(psi1,psi2)*dr-dr/2.0*psi1[0]*psi2[0]-dr/2.0*psi1[-1]*psi2[-1]
 
 def normalization_of_continuum_wave_fun(psi, energy, r):
-    mu = m_p #masse raduite = masse deuterium/2 = mp
+    mu = reduced_mass_d2
     k = math.sqrt(2*mu*energy)/hbar
     s = math.sin(k*r[-1])
     c = math.cos(k*r[-1])
@@ -172,6 +185,7 @@ def normalization_of_continuum_wave_fun(psi, energy, r):
     #print("ormalization_of_continuum_wave_fun "+str(math.sqrt((A**2+B**2)*math.pi*k)))
     return math.sqrt((A**2+B**2)*math.pi*k)
     #return np.sqrt(k)
+    #return 1
 
 def normalize_continuum_wave_fun(psi, energy, r):
     psi_normalized = psi/normalization_of_continuum_wave_fun(psi, energy, r)
@@ -379,7 +393,7 @@ def numerov(NumerovParams):
         if is_bound_potential:
             eigen_vectors.append(ev/wave_fun_norm(ev, dr))
         else:
-            eigen_vectors.append(normalize_continuum_wave_fun(ev, eigen_values[c], r))
+            eigen_vectors.append(normalize_continuum_wave_fun(ev, eigen_values[c]-E_min, r))
         c = c+1
 
     eigen_vectors = np.asarray(eigen_vectors)
@@ -429,17 +443,17 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E, r_bohr):
 
     delta_E = eigen_values_free[1]-eigen_values_free[0]
 
-    #if E < eigen_values_free[0]-delta_E:
-    #    return (0, np.zeros(eigen_vectors_free[0].size))
+    if E < eigen_values_free[0]-delta_E:
+       return (0, np.zeros(eigen_vectors_free[0].size))
 
-    if E < eigen_values_free[0]:
-        eigen_vec = eigen_vectors_free[0]
-        r_meter = r_bohr*bohr_to_meter
-        eigen_vec = eigen_vec*normalization_of_continuum_wave_fun(eigen_vec, eigen_values_free[0], r_meter)
-        eigen_vec = eigen_vec/normalization_of_continuum_wave_fun(eigen_vec, E, r_meter)
-        #print("in final dissoc state np.linalg.norm(eigen_vec) "+str(np.linalg.norm(eigen_vec)))
-        #print(np.linalg.norm(eigen_vec))
-        return (E, eigen_vec)
+    # if E < eigen_values_free[0]:
+    #     eigen_vec = eigen_vectors_free[0]
+    #     r_meter = r_bohr*bohr_to_meter
+    #     eigen_vec = eigen_vec*normalization_of_continuum_wave_fun(eigen_vec, eigen_values_free[0], r_meter)
+    #     eigen_vec = eigen_vec/normalization_of_continuum_wave_fun(eigen_vec, E, r_meter)
+    #     #print("in final dissoc state np.linalg.norm(eigen_vec) "+str(np.linalg.norm(eigen_vec)))
+    #     #print(np.linalg.norm(eigen_vec))
+    #     return (E, eigen_vec)
 
     i = np.abs(eigen_values_free-E).argmin()
     return (eigen_values_free[i], eigen_vectors_free[i])
@@ -454,9 +468,16 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E, r_bohr):
 # E: energy for which we want p(E), proba to observe kinetic energy E
 # bounded_state_IP: ionisation potential of molecule bounded state in eV
 #
-def ker_dissoc(bound_vib_level_distrib, eigen_values_bound,
-eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
-r_bohr_free, E, bounded_state_IP, V_free, gamma=1.547):
+def ker_dissoc(numerov_res_bound, numerov_res_free, bound_vib_level_distrib, E,
+bounded_state_IP, gamma=1.547):
+
+    eigen_values_bound = numerov_res_bound.eigen_values
+    eigen_vectors_bound = numerov_res_bound.eigen_vectors
+    r_bohr_bound = numerov_res_bound.r_bohr
+    eigen_values_free = numerov_res_free.eigen_values
+    eigen_vectors_free = numerov_res_free.eigen_vectors
+    r_bohr_free = numerov_res_free.r_bohr
+    V_free = numerov_res_free.V
 
     p_E = 0
     dr_bound = r_bohr_bound[1]-r_bohr_bound[0]
@@ -473,30 +494,37 @@ r_bohr_free, E, bounded_state_IP, V_free, gamma=1.547):
 
         e_val_b = eigen_values_bound[ev_b_idx]
         e_vec_b = eigen_vectors_bound[ev_b_idx]
-
+        #
         #Proba to be in vibrational bound state v
         proba_v = bound_vib_level_distrib(e_val_b)
-
+        #
         #Transition probability = scalar product between initial and
         #final states
         #trans_proba_squared = wave_fun_scalar_prod(e_vec_b, final_free_state, dr_bound)**2
-        #trans_proba_squared = wave_fun_scalar_prod(e_vec_b*r_bohr_bound, final_free_state, dr_bound)**2
+        trans_proba_squared = wave_fun_scalar_prod(e_vec_b*r_bohr_bound, final_free_state, dr_bound)**2
+
+        #sigma = 0.05/math.sqrt(2*math.log(2))
 
         #divide by cosh: remove from probability the fact that you can form a
         #bounded D2 molecule 1/cosh((E(eV)-E_res)/1.547)^2
-        #E_res = e_val_b-bounded_state_IP
-        #p_E = p_E+proba_v*trans_proba_squared/math.cosh((E-E_res)/gamma)**2
+        E_res = e_val_b-bounded_state_IP
+        p_E = p_E+proba_v*trans_proba_squared/math.cosh((E-E_res)/gamma)**2
 
-        f = lambda x: V_free(x)/electron_charge-E
-        r_star = sp.optimize.brentq(f, 0, 10)
-        r_star_bohr = r_star/bohr_to_meter
+        #*math.exp(-(E-E_final_state)**2/(2*sigma**2))/0.106447
 
-        dr = (r_bohr_free[1]-r_bohr_free[0])
-        V_free_deriv = np.abs((V_free(r_star+dr)-V_free(r_star))/dr)
+        # print("E "+str(E))
+        # print("E final state "+str(E))
+        # print(math.exp(-(E-E_final_state)**2/(2*sigma**2))/0.106447)
 
-        e_vec_b_f = interp1d(r_bohr_bound, e_vec_b, kind=0,fill_value="extrapolate")
-        #p_E = p_E + proba_v*r_star_bohr*e_vec_b_f(r_star_bohr)**2/V_free_deriv
-        p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv
+        # f = lambda x: V_free(x)-E
+        # r_star_bohr = sp.optimize.brentq(f, 0, 10)
+        #
+        # dr = (r_bohr_free[1]-r_bohr_free[0])
+        # V_free_deriv = np.abs((V_free(r_star_bohr+dr)-V_free(r_star_bohr))/dr)
+        #
+        # e_vec_b_f = interp1d(r_bohr_bound, e_vec_b, kind=0,fill_value="extrapolate")
+        # p_E = p_E + proba_v*r_star_bohr*e_vec_b_f(r_star_bohr)**2/V_free_deriv
+        #p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv
 
         #if E < 0.02:
         #    print("proba_v "+str(proba_v))
@@ -707,17 +735,6 @@ def D2_plus_vib_level_distrib(eigen_values_bound):
 
 ########### In this part will fit exp ker D_2^+ + D^- -> D+D +D ? with theo ker #######################
 
-# ker_exp_f_path = "d2_ker_distribution.txt"
-# ker_exp = np.loadtxt(ker_exp_f_path, skiprows=1)
-# #Drop values below 0.2eV and above 7ev
-# ker_exp = ker_exp[ker_exp[:,0] >= 0.5]
-# ker_exp = ker_exp[ker_exp[:,0] <= 7]
-#
-
-#numerov_res_D2P = numerov(D2P_POTENTIAL_FILE, True, E_max_bound_states_D2p,
-#reduced_mass_d2, refine=3)
-#numerov_res_free = numerov(D2DISSOC_POTENTIAL_FILE, False, 10, reduced_mass_d2, refine=1)
-
 #
 # ker_exp: 2D numpy array, first column contains energies in eV.
 #           second column contains the number of events with corresponding energy
@@ -750,161 +767,63 @@ def exp_theo_error_wrap(tuple_params):
     (ker_exp, numerov_res_bound, numerov_res_free, alpha, gamma) = tuple_params
     return exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alpha, gamma)
 
-#f = lambda alpha: exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alpha, 1.5)
 
-#Search bracket alpha
-# alpha = 2300000000
-# delta_alpha = 10**8
-# error = 10**10
-# prev_error = 10**20
-# while prev_error > error:
-#     prev_error = error
-#     error = f(alpha)
-#     alpha = alpha+delta_alpha
-# alpha_right = alpha
-# alpha_left = alpha-2*delta_alpha
+ker_exp_f_path = "data/d2_ker_distribution.txt"
+ker_exp = np.loadtxt(ker_exp_f_path, skiprows=1)
+#Drop values below 0.2eV and above 7ev
+ker_exp = ker_exp[ker_exp[:,0] >= 0.5]
+ker_exp = ker_exp[ker_exp[:,0] <= 7]
 
+numerov_res_D2P = numerov(D2P_NUMEROV_PARAMS)
+numerov_res_D2B = numerov(D2B_NUMEROV_PARAMS)
+numerov_res_i = numerov_res_D2P
+numerov_res_f = numerov_res_D2B
+numerov_res_f.write_eigen_vector("data/free_evec.txt")
+#numerov_res_f.plot()
 
-# error = 10**10
-# prev_error = 10**20
-#
-# while np.abs(error-prev_error) > 1:
-#     prev_error = error
-#     print(prev_error)
-#     alpha = alpha_left+(alpha_right-alpha_left)/2.0
-#     error = f(alpha)
-#     print(error)
-#     error_delta_right = f(alpha+0.5)
-#     error_delta_left = f(alpha-0.5)
-#     if error_delta_left < error_delta_right:
-#         alpha_right = alpha
-#     else:
-#         alpha_left = alpha
-# print(alpha)
-
-#alpha = 2429711914.0625
-
-# gammas = np.linspace(1, 2, 100)
-# errors = []
-# for gamma in gammas:
-#     errors.append(exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alpha, gamma))
-# errors = np.array(errors)
-# i = errors.argmin()
-# print(gammas[i])
-#gamma = 1.55555555556
-
-#(r_bohr_bound, V_bound, eigen_values_bound, eigen_vectors_bound) = numerov_res_D2P
-#(r_bohr_free, V_free, eigen_values_free, eigen_vectors_free) = numerov_res_free
-
-#plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free, plot_ratio=1)
-
-
-#Try to fit the curve at best, grid search alpha - gamma
-#gammas = np.linspace(1.35, 2, 20)
-#alphas = np.linspace(1*10**8, 35*10**8, 20)
-
-# gammas = np.linspace(0.5, 4, 100)
-# alphas = np.linspace(10**7, 25*10**8, 100)
-# errors = np.zeros((gammas.size, alphas.size))
-#
-# fig = plt.figure()
-# ax = fig.add_subplot(111, projection='3d')
-#
-# items = []
-# #kept = []
-# for i in range(0,gammas.size):
-#     for j in range(0,alphas.size):
-#         #if not (gammas[i] > 2.0 and alphas[i] > 0.5):
-#         items.append((ker_exp, numerov_res_bound, numerov_res_free, alphas[j], gammas[i]))
-#         #kept.append((i,j))
-#
-# executor = concurrent.futures.ProcessPoolExecutor(4)
-# futures = [executor.submit(exp_theo_error_wrap, item) for item in items]
-# concurrent.futures.wait(futures)
-#
-# for future_idx in range(0,len(futures)):
-#     i = int(future_idx/alphas.size)
-#     j = int(future_idx%alphas.size)
-#     errors[i][j] = futures[future_idx].result()
-#
-# #k = 0
-# #for (i,j) in kept:
-# #    errors[i][j] = futures[k].result()
-# #    k = k+1
-#
-#
-# #for i in range(0,gammas.size):
-# #    for j in range(0,alphas.size):
-# #        errors[i][j] = exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alphas[j], gammas[i])
-#
-# #errors = np.array(errors)
-# flatten_idx = errors.argmin()
-#
-# i = int(flatten_idx/alphas.size)
-# j = int(flatten_idx%alphas.size)
-#
-# print(i)
-# print(j)
-#
-# alpha = alphas[j]
-# gamma = gammas[i]
-#
-# print("minimum error for alpha "+str(alpha)+" and gamma "+str(gamma))
-#
-# ax = fig.add_subplot(111, projection='3d')
-#
-# X, Y = np.meshgrid(alphas, gammas)
-# Z = errors
-#
-# ax.plot_surface(X, Y, Z, color='b')
-#
-# plt.show()
-
-#minimum error for alpha 433030303.03 and gamma 2.24242424242 starting from 0.2eV
-#minimum error for alpha 451951333.367 and gamma 2.21656477901 starting from 0.2ev (scipy)
-#minimum error for alpha 60303030.303 and gamma 3.89393939394 starting from 0.8eV
-#minimum error for alpha 66708983.1675 and gamma 3.74454792294 from 0.8eV (scipy)
-#minimum error for alpha 60303030.303 and gamma 3.82323232323 starting from 1.11eV
-#minimum error for alpha 41688581.6395 and gamma 4.4093264698 from 1.11eV (scipy)
-
-
-######### Optimize with scipy #################
-
+# plot_bound_and_free(numerov_res_i.eigen_vectors, numerov_res_i.eigen_values,
+# numerov_res_i.r_bohr, numerov_res_i.V,
+# numerov_res_f.eigen_vectors, numerov_res_f.eigen_values,
+# numerov_res_f.r_bohr, numerov_res_f.V, plot_ratio_bound=1, plot_ratio_free=1,
+#     V_free_shift=0)
 
 def ker_to_fit(energies, alpha, gamma=1.54):
 
     p_e = np.zeros(energies.size)
     for i in range(0, p_e.size):
-        p_e[i] = alpha*ker(D2_plus_vib_level_distrib(eigen_values_bound), eigen_values_bound,
-        eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
-        r_bohr_free, energies[i], ionisation_potential_d2, V_free, gamma)
-
+        p_e[i] = alpha*ker_dissoc(numerov_res_D2P, numerov_res_D2B,
+        D2_plus_vib_level_distrib(numerov_res_D2P.eigen_values), energies[i],
+        ionisation_potential_d2, gamma)
     return p_e
+
+energies = ker_exp[:,0]
+proba_exp = ker_exp[:,1]
+
 #
-# energies = ker_exp[:,0]
-# proba_exp = ker_exp[:,1]
+res = sp.optimize.curve_fit(ker_to_fit, energies, proba_exp, p0=(1,1))
+#res = sp.optimize.curve_fit(ker_to_fit, energies, proba_exp, p0=(35*10**8))#, 3))
+#print(res)
+#res = [(0.000146889116013, 8.00268053247)]
+#(alpha, gamma) = (222521.324352, -4455915.30647)#res[0]
+(alpha, gamma) = res[0]
+#alpha = res[0]
 #
-# #res = sp.optimize.curve_fit(ker_to_fit, energies, proba_exp, p0=(433030303, 2.24))
-# res = sp.optimize.curve_fit(ker_to_fit, energies, proba_exp, p0=(35*10**8))#, 3))
-# #print(res)
-# (alpha, gamma) = (res[0],1.54)
+print("minimum error for alpha "+str(alpha)+" and gamma "+str(gamma))
+#print(res[1])
 #
-# print("minimum error for alpha "+str(alpha)+" and gamma "+str(gamma))
-# print(res[1])
-#
-# energies_theo = np.linspace(0.001, 10, 200)
+energies_theo = np.linspace(0.0, 10, 200)
 # #energies_theo = np.linspace(0, 0.5, 2000)
-# proba_theo = []
-# for e in energies_theo:
-#     p_e = ker(D2_plus_vib_level_distrib(eigen_values_bound), eigen_values_bound,
-#     eigen_vectors_bound, eigen_values_free, eigen_vectors_free, r_bohr_bound,
-#     r_bohr_free, e, ionisation_potential_d2, V_free, gamma)
-#     proba_theo.append(p_e)
-# proba_theo = alpha*np.array(proba_theo)
+proba_theo = []
+for e in energies_theo:
+    p_e = ker_dissoc(numerov_res_D2P, numerov_res_D2B,
+    D2_plus_vib_level_distrib(numerov_res_D2P.eigen_values), e,
+    ionisation_potential_d2, gamma)
+    proba_theo.append(p_e)
+proba_theo = alpha*np.array(proba_theo)
 #
-# plt.plot(energies, proba_exp)
-# plt.plot(energies_theo, proba_theo)
-# plt.show()
+plt.plot(energies, proba_exp)
+plt.plot(energies_theo, proba_theo)
+plt.show()
 
 
 #q(r)
@@ -1113,134 +1032,134 @@ energies):
 
 
 
-ker_exp = np.loadtxt(EXP_KER_PATH)
-energies = ker_exp[:,0]
-events_nbr_exp = ker_exp[:,1]
-
-# end_states_no_q_r = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*3, "GK1SG"),
-# (D2STAR_2_3SG_NUMEROV_PARAMS, 150*3/4, "2_3SG"),
-# (D2STAR_3_3SG_NUMEROV_PARAMS, 140, "3_3SG"),
+# ker_exp = np.loadtxt(EXP_KER_PATH)
+# energies = ker_exp[:,0]
+# events_nbr_exp = ker_exp[:,1]
+#
+# # end_states_no_q_r = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*3, "GK1SG"),
+# # (D2STAR_2_3SG_NUMEROV_PARAMS, 150*3/4, "2_3SG"),
+# # (D2STAR_3_3SG_NUMEROV_PARAMS, 140, "3_3SG"),
+# # (D2STAR_1_SU_B_NUMEROV_PARAMS, 125, "1_SU_B"),
+# # (D2STAR_1_SU_BP_NUMEROV_PARAMS, 450, "1_SU_BP"),
+# # (D2STAR_1_SU_BPP_NUMEROV_PARAMS, 100, "1_SU_BPP"),
+# # (D2STAR_2_1SG_NUMEROV_PARAMS, 90, "2_1SG"),
+# # (D2STAR_3_1SG_NUMEROV_PARAMS, 300, "3_1SG"),
+# # (D2STAR_4_1SG_NUMEROV_PARAMS, 125, "4_1SG"),
+# # (D2STAR_2_3SU_NUMEROV_PARAMS, 125*1.5, "2_3SU"),
+# # (D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
+# # (D2STAR_4_3SU_NUMEROV_PARAMS, 125, "4_3SU")]
+#
+# end_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*2.7, "GK1SG"),
+# (D2STAR_2_3SG_NUMEROV_PARAMS, 150*4/5, "2_3SG"),
+# (D2STAR_3_3SG_NUMEROV_PARAMS, 140*3/5, "3_3SG"),
 # (D2STAR_1_SU_B_NUMEROV_PARAMS, 125, "1_SU_B"),
 # (D2STAR_1_SU_BP_NUMEROV_PARAMS, 450, "1_SU_BP"),
-# (D2STAR_1_SU_BPP_NUMEROV_PARAMS, 100, "1_SU_BPP"),
+# (D2STAR_1_SU_BPP_NUMEROV_PARAMS, 10, "1_SU_BPP"), #ici j avais mis 0
 # (D2STAR_2_1SG_NUMEROV_PARAMS, 90, "2_1SG"),
-# (D2STAR_3_1SG_NUMEROV_PARAMS, 300, "3_1SG"),
-# (D2STAR_4_1SG_NUMEROV_PARAMS, 125, "4_1SG"),
-# (D2STAR_2_3SU_NUMEROV_PARAMS, 125*1.5, "2_3SU"),
+# (D2STAR_3_1SG_NUMEROV_PARAMS, 300*1.5*2.7, "3_1SG"),
+# (D2STAR_4_1SG_NUMEROV_PARAMS, 125*5/6, "4_1SG"),
+# (D2STAR_2_3SU_NUMEROV_PARAMS, 125, "2_3SU"),
 # (D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
-# (D2STAR_4_3SU_NUMEROV_PARAMS, 125, "4_3SU")]
-
-end_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*2.7, "GK1SG"),
-(D2STAR_2_3SG_NUMEROV_PARAMS, 150*4/5, "2_3SG"),
-(D2STAR_3_3SG_NUMEROV_PARAMS, 140*3/5, "3_3SG"),
-(D2STAR_1_SU_B_NUMEROV_PARAMS, 125, "1_SU_B"),
-(D2STAR_1_SU_BP_NUMEROV_PARAMS, 450, "1_SU_BP"),
-(D2STAR_1_SU_BPP_NUMEROV_PARAMS, 10, "1_SU_BPP"), #ici j avais mis 0
-(D2STAR_2_1SG_NUMEROV_PARAMS, 90, "2_1SG"),
-(D2STAR_3_1SG_NUMEROV_PARAMS, 300*1.5*2.7, "3_1SG"),
-(D2STAR_4_1SG_NUMEROV_PARAMS, 125*5/6, "4_1SG"),
-(D2STAR_2_3SU_NUMEROV_PARAMS, 125, "2_3SU"),
-(D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
-(D2STAR_4_3SU_NUMEROV_PARAMS, 10, "4_3SU"), #ici j avais mis 0
-(D2STAR_1PI_U_C_NUMEROV_PARAMS,50, "1PI_U_C"),
-(D2STAR_1PI_U_D_NUMEROV_PARAMS,50, "1PI_U_D")]
-#
-# end_states_q_r_quad = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*5/6, "GK1SG"),
-# (D2STAR_2_3SG_NUMEROV_PARAMS, 150*8/15, "2_3SG"),
-# (D2STAR_3_3SG_NUMEROV_PARAMS, 20, "3_3SG"),
-# (D2STAR_1_SU_B_NUMEROV_PARAMS, 125, "1_SU_B"),
-# (D2STAR_1_SU_BP_NUMEROV_PARAMS, 233, "1_SU_BP"),
-# (D2STAR_1_SU_BPP_NUMEROV_PARAMS, 10, "1_SU_BPP"),
-# (D2STAR_2_1SG_NUMEROV_PARAMS, 90, "2_1SG"),
-# #(D2STAR_3_1SG_NUMEROV_PARAMS, 300*1.5*2.7, "3_1SG"),
-# (D2STAR_4_1SG_NUMEROV_PARAMS, 70, "4_1SG"),
-# (D2STAR_2_3SU_NUMEROV_PARAMS, 125*3/4, "2_3SU"),
-# (D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
-# (D2STAR_4_3SU_NUMEROV_PARAMS, 10, "4_3SU"),
+# (D2STAR_4_3SU_NUMEROV_PARAMS, 10, "4_3SU"), #ici j avais mis 0
 # (D2STAR_1PI_U_C_NUMEROV_PARAMS,50, "1PI_U_C"),
-# (D2STAR_1PI_U_D_NUMEROV_PARAMS,20, "1PI_U_D")]
+# (D2STAR_1PI_U_D_NUMEROV_PARAMS,50, "1PI_U_D")]
+# #
+# # end_states_q_r_quad = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*5/6, "GK1SG"),
+# # (D2STAR_2_3SG_NUMEROV_PARAMS, 150*8/15, "2_3SG"),
+# # (D2STAR_3_3SG_NUMEROV_PARAMS, 20, "3_3SG"),
+# # (D2STAR_1_SU_B_NUMEROV_PARAMS, 125, "1_SU_B"),
+# # (D2STAR_1_SU_BP_NUMEROV_PARAMS, 233, "1_SU_BP"),
+# # (D2STAR_1_SU_BPP_NUMEROV_PARAMS, 10, "1_SU_BPP"),
+# # (D2STAR_2_1SG_NUMEROV_PARAMS, 90, "2_1SG"),
+# # #(D2STAR_3_1SG_NUMEROV_PARAMS, 300*1.5*2.7, "3_1SG"),
+# # (D2STAR_4_1SG_NUMEROV_PARAMS, 70, "4_1SG"),
+# # (D2STAR_2_3SU_NUMEROV_PARAMS, 125*3/4, "2_3SU"),
+# # (D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
+# # (D2STAR_4_3SU_NUMEROV_PARAMS, 10, "4_3SU"),
+# # (D2STAR_1PI_U_C_NUMEROV_PARAMS,50, "1PI_U_C"),
+# # (D2STAR_1PI_U_D_NUMEROV_PARAMS,20, "1PI_U_D")]
+# #
+# #
+# def ker_vec_fit(energies, a, b, c, alpha1, alpha2):#, alpha3, alpha4, alpha5):
 #
+#     return gaussian(a, b, c, energies)*( \
+#     comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_GK1SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha1+ \
+#     comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha2)# + \
+#     #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha3 + \
+#     #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha4 + \
+#     #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_4_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha5)
+#     #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha4)
+#     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha3 + \
+#     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_1_SU_B_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha4 + \
+#     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_1SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha5 + \
+#     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_4_1SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha6 + \
+#     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha7 + \
+#     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha8 + \
+#     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha9
+#     #)
 #
-def ker_vec_fit(energies, a, b, c, alpha1, alpha2):#, alpha3, alpha4, alpha5):
-
-    return gaussian(a, b, c, energies)*( \
-    comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_GK1SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha1+ \
-    comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha2)# + \
-    #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha3 + \
-    #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha4 + \
-    #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_4_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha5)
-    #comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha4)
-    # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha3 + \
-    # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_1_SU_B_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha4 + \
-    # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_1SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha5 + \
-    # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_4_1SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha6 + \
-    # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_2_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha7 + \
-    # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SU_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha8 + \
-    # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha9
-    #)
-
-energies_fit_idx = np.logical_and(energies > 0.5, energies < 2)
 # energies_fit_idx = np.logical_and(energies > 0.5, energies < 2)
+# # energies_fit_idx = np.logical_and(energies > 0.5, energies < 2)
+# #
+# energies_fit = energies[energies_fit_idx]
+# events_nbr_exp_fit = events_nbr_exp[energies_fit_idx]
 #
-energies_fit = energies[energies_fit_idx]
-events_nbr_exp_fit = events_nbr_exp[energies_fit_idx]
-
-#Bound for width at mid height of gaussian 1eV
-
-b_bot_bound = 1.15
-b_up_bound = 1.5
-c_up_bound = 1/math.sqrt(2*math.log(2))
-
-res = sp.optimize.curve_fit(ker_vec_fit, energies_fit,
-events_nbr_exp_fit, p0=(1, 1.3, 0.5, 1, 1),
-bounds = ((0,b_bot_bound,0,0,0), (math.inf,b_up_bound,c_up_bound,math.inf,math.inf))
-)
-
-print(res)
-(a, b, c, alpha1, alpha2) = res[0]
-
-
-def pop_from_coef(energies, numerov_params_list,
-alpha1, alpha2, alpha3=0, alpha4=0, alpha5=0):
-
-    ker = ker_vec_fit(energies, a, b, c, alpha1, alpha2) #alpha3, alpha4, alpha5)
-    alphas = [alpha1, alpha2, alpha3, alpha4, alpha5]
-    ker_fun =interp1d(energies, ker,kind=0,fill_value=0, bounds_error = False)
-
-    I, abserr = sp.integrate.quad(ker_fun, energies[0], energies[-1],limit=20000)
-    pop = []
-
-    for i in range(0, len(numerov_params_list)):
-        ker_component = gaussian(a, b, c, energies)* \
-        comp_ker_vector(D2P_NUMEROV_PARAMS, numerov_params_list[i],
-        D2_plus_vib_level_distrib, energies)*alphas[i]
-        ker_comp_fun =interp1d(energies, ker_component, kind=0, fill_value=0,
-        bounds_error = False)
-        I_i, abserr_i= sp.integrate.quad(ker_comp_fun, energies[0], energies[-1],limit=20000)
-        pop.append(I_i/I)
-    return pop
-
-numerov_params_list = [D2STAR_GK1SG_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS,
-D2STAR_3_3SG_NUMEROV_PARAMS, D2STAR_2_3SU_NUMEROV_PARAMS, D2STAR_4_3SU_NUMEROV_PARAMS]
-
-pop = pop_from_coef(energies, numerov_params_list, alpha1, alpha2)
-#alpha3, alpha4, alpha5)
-
-print("GK1SG "+str(pop[0]))
-print("1_SU_BP "+str(pop[1]))
-print("3_3SG "+str(pop[2]))
-print("2_3SU "+str(pop[3]))
-print("4_3SU "+str(pop[4]))
+# #Bound for width at mid height of gaussian 1eV
+#
+# b_bot_bound = 1.15
+# b_up_bound = 1.5
+# c_up_bound = 1/math.sqrt(2*math.log(2))
+#
+# res = sp.optimize.curve_fit(ker_vec_fit, energies_fit,
+# events_nbr_exp_fit, p0=(1, 1.3, 0.5, 1, 1),
+# bounds = ((0,b_bot_bound,0,0,0), (math.inf,b_up_bound,c_up_bound,math.inf,math.inf))
+# )
+#
+# print(res)
+# (a, b, c, alpha1, alpha2) = res[0]
+#
+#
+# def pop_from_coef(energies, numerov_params_list,
+# alpha1, alpha2, alpha3=0, alpha4=0, alpha5=0):
+#
+#     ker = ker_vec_fit(energies, a, b, c, alpha1, alpha2) #alpha3, alpha4, alpha5)
+#     alphas = [alpha1, alpha2, alpha3, alpha4, alpha5]
+#     ker_fun =interp1d(energies, ker,kind=0,fill_value=0, bounds_error = False)
+#
+#     I, abserr = sp.integrate.quad(ker_fun, energies[0], energies[-1],limit=20000)
+#     pop = []
+#
+#     for i in range(0, len(numerov_params_list)):
+#         ker_component = gaussian(a, b, c, energies)* \
+#         comp_ker_vector(D2P_NUMEROV_PARAMS, numerov_params_list[i],
+#         D2_plus_vib_level_distrib, energies)*alphas[i]
+#         ker_comp_fun =interp1d(energies, ker_component, kind=0, fill_value=0,
+#         bounds_error = False)
+#         I_i, abserr_i= sp.integrate.quad(ker_comp_fun, energies[0], energies[-1],limit=20000)
+#         pop.append(I_i/I)
+#     return pop
+#
+# numerov_params_list = [D2STAR_GK1SG_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS,
+# D2STAR_3_3SG_NUMEROV_PARAMS, D2STAR_2_3SU_NUMEROV_PARAMS, D2STAR_4_3SU_NUMEROV_PARAMS]
+#
+# pop = pop_from_coef(energies, numerov_params_list, alpha1, alpha2)
+# #alpha3, alpha4, alpha5)
+#
+# print("GK1SG "+str(pop[0]))
+# print("1_SU_BP "+str(pop[1]))
+# print("3_3SG "+str(pop[2]))
+# print("2_3SU "+str(pop[3]))
+# print("4_3SU "+str(pop[4]))
 
 
 
 
 
 #
-plt.plot(energies, events_nbr_exp)
-plt.plot(energies, ker_vec_fit(energies, a, b, c, alpha1, alpha2))#, alpha3, alpha4, alpha5))
-plt.plot(energies, alpha1*gaussian(a, b, c,energies))
-plt.show()
+# plt.plot(energies, events_nbr_exp)
+# plt.plot(energies, ker_vec_fit(energies, a, b, c, alpha1, alpha2))#, alpha3, alpha4, alpha5))
+# plt.plot(energies, alpha1*gaussian(a, b, c,energies))
+# plt.show()
 
 # energy_shift = 0
 # plt.plot(energies, events_nbr_exp)
