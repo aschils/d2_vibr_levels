@@ -61,44 +61,52 @@ ker_exp = ker_exp[ker_exp[:,0] >= 0.5]
 ker_exp = ker_exp[ker_exp[:,0] <= 7]
 
 numerov_res_D2P = numerov(D2P_NUMEROV_PARAMS)
-numerov_res_D2B = numerov(D2B_NUMEROV_PARAMS)
+numerov_res_D2B = numerov(D2B_NUMEROV_PARAMS, False)
+numerov_res_D2B.write_eigen_vector("data/free_evec.txt")
+#numerov_res_D2P.plot()
+#numerov_res_D2B.plot()
+#
 numerov_res_i = numerov_res_D2P
 numerov_res_f = numerov_res_D2B
-numerov_res_f.write_eigen_vector("data/free_evec.txt")
-#numerov_res_f.plot()
+plot_bound_and_free(numerov_res_i.eigen_vectors, numerov_res_i.eigen_values,
+numerov_res_i.r_bohr, numerov_res_i.V,
+numerov_res_f.eigen_vectors, numerov_res_f.eigen_values,
+numerov_res_f.r_bohr, numerov_res_f.V, plot_ratio_bound=1, plot_ratio_free=1,
+V_free_shift=0)
 
-# plot_bound_and_free(numerov_res_i.eigen_vectors, numerov_res_i.eigen_values,
-# numerov_res_i.r_bohr, numerov_res_i.V,
-# numerov_res_f.eigen_vectors, numerov_res_f.eigen_values,
-# numerov_res_f.r_bohr, numerov_res_f.V, plot_ratio_bound=1, plot_ratio_free=1,
-#     V_free_shift=0)
 
+FCM = comp_franck_condon_matrix(numerov_res_i, numerov_res_f)
 
 energies = ker_exp[:,0]
 proba_exp = ker_exp[:,1]
+energies_theo = numerov_res_D2B.eigen_values #np.linspace(0.0, 10, 200)
+energies_theo = energies_theo[energies_theo > 1]
+
+proba_exp_f = interp1d(energies,proba_exp,kind="linear",fill_value="extrapolate")
+
 
 #
-res = sp.optimize.curve_fit(ker_to_fit, (energies, numerov_res_D2P,
-numerov_res_D2B), proba_exp, p0=(1,1))
+res = sp.optimize.curve_fit(ker_to_fit, (energies_theo, numerov_res_D2P,
+numerov_res_D2B, FCM), proba_exp_f(energies_theo), p0=(10e29))
 #res = sp.optimize.curve_fit(ker_to_fit, energies, proba_exp, p0=(35*10**8))#, 3))
 #print(res)
 #res = [(0.000146889116013, 8.00268053247)]
 #(alpha, gamma) = (222521.324352, -4455915.30647)#res[0]
-(alpha, gamma) = res[0]
-#alpha = res[0]
+#(alpha, gamma) = res[0]
+alpha = res[0]
 #
-print("minimum error for alpha "+str(alpha)+" and gamma "+str(gamma))
+print("minimum error for alpha "+str(alpha))#+" and gamma "+str(gamma))
 #print(res[1])
 #
-energies_theo = np.linspace(0.0, 10, 200)
 # #energies_theo = np.linspace(0, 0.5, 2000)
 proba_theo = []
 for e in energies_theo:
     p_e = ker_dissoc(numerov_res_D2P, numerov_res_D2B,
     D2_plus_vib_level_distrib(numerov_res_D2P.eigen_values), e,
-    ionisation_potential_d2, gamma)
+    FCM)
     proba_theo.append(p_e)
 proba_theo = alpha*np.array(proba_theo)
+print(proba_theo)
 #
 plt.plot(energies, proba_exp)
 plt.plot(energies_theo, proba_theo)

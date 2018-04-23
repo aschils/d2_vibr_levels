@@ -12,6 +12,11 @@
 #is 1D in this case. The goal is to find the vibrational energies of these
 #molecules.
 
+# Symétrie autorisée:
+# Sigma_g^+, Pi_u, Delta_g
+# Sigma_u^+, Pi_g, Delta_u
+#
+
 import math
 import numpy as np
 import scipy as sp
@@ -23,6 +28,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import pickle
 import concurrent.futures
+import scipy.interpolate as interpolate
 
 #Some constants
 NUMEROV_SAVE_PKL_DIR = "cache_pkl"
@@ -47,6 +53,14 @@ D2STAR_3_3SU_POTENTIAL_FILE = "3_3Sigma_u"
 D2STAR_4_3SU_POTENTIAL_FILE = "4_3Sigma_u"
 D2STAR_1PI_U_C_POTENTIAL_FILE = "1Piu_C.txt"
 D2STAR_1PI_U_D_POTENTIAL_FILE = "1Piu_D.txt"
+D2STAR_1_3PI_G_POTENTIAL_FILE = "1_3pig.txt"
+D2STAR_1_3PI_U_POTENTIAL_FILE = "1_3piu.txt"
+D2STAR_2_3PI_G_POTENTIAL_FILE = "2_3pig.txt"
+D2STAR_2_3PI_U_POTENTIAL_FILE = "2_3piu.txt"
+D2STAR_3_3PI_G_POTENTIAL_FILE = "3_3pig.txt"
+D2STAR_3_3PI_U_POTENTIAL_FILE = "3_3piu.txt"
+D2STAR_1_PI_GI_POTENTIAL_FILE = "1_pi_g_I.txt"
+D2STAR_1_PI_GR_POTENTIAL_FILE = "1_pi_g_R.txt"
 
 
 EXP_KER_PATH = "data/ker_d2_d.txt"
@@ -125,7 +139,7 @@ refine = 2
 D2P_NUMEROV_PARAMS = NumerovParams(D2P_POTENTIAL_FILE, True, E_max_bound_states_D2p,
 reduced_mass_d2, 10, refine, False, True)
 D2B_NUMEROV_PARAMS = NumerovParams(D2DISSOC_POTENTIAL_FILE, False, E_max_bound_states_D2b,
-reduced_mass_d2, 10, refine, False, False)
+reduced_mass_d2, 10, 1, False, False)
 D2X_1SG_NUMEROV_PARAMS = NumerovParams(D2X_1SG_POTENTIAL_FILE, True,
 0, reduced_mass_d2, 0, refine, True, True)
 D2STAR_GK1SG_NUMEROV_PARAMS = NumerovParams(D2STAR_GK1SG_POTENTIAL_FILE, True,
@@ -156,6 +170,25 @@ D2STAR_1PI_U_C_NUMEROV_PARAMS = NumerovParams(D2STAR_1PI_U_C_POTENTIAL_FILE, Tru
 0, reduced_mass_d2, 10, refine, True, True)
 D2STAR_1PI_U_D_NUMEROV_PARAMS = NumerovParams(D2STAR_1PI_U_D_POTENTIAL_FILE, True,
 0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_1_3PI_G_NUMEROV_PARAMS = NumerovParams(D2STAR_1_3PI_G_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_1_3PI_U_NUMEROV_PARAMS = NumerovParams(D2STAR_1_3PI_U_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_2_3PI_G_NUMEROV_PARAMS = NumerovParams(D2STAR_2_3PI_G_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_2_3PI_U_NUMEROV_PARAMS = NumerovParams(D2STAR_2_3PI_U_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_3_3PI_G_NUMEROV_PARAMS = NumerovParams(D2STAR_3_3PI_G_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_3_3PI_U_NUMEROV_PARAMS = NumerovParams(D2STAR_3_3PI_U_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_1_PI_GI_NUMEROV_PARAMS = NumerovParams(D2STAR_1_PI_GI_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
+D2STAR_1_PI_GR_NUMEROV_PARAMS = NumerovParams(D2STAR_1_PI_GR_POTENTIAL_FILE, True,
+0, reduced_mass_d2, 10, refine, True, True)
+
+
+
 
 q_r_data = np.loadtxt(Q_R_PATH)
 r = q_r_data[:,0]
@@ -169,30 +202,104 @@ def gaussian(a, b, c, x):
 
 # <psi1 | psi2> = int_{-\infty}^{\infty} psi1(r)^* psi2(r) dr
 def wave_fun_scalar_prod(psi1, psi2, dr):
+    # f = psi1*psi2
+    #
+    # #for i in range(0,psi1.size):
+    # I = dr/2*(2*np.sum(f)-f[0]-f[-1])
+    # return I
     return np.dot(psi1,psi2)*dr-dr/2.0*psi1[0]*psi2[0]-dr/2.0*psi1[-1]*psi2[-1]
 
-def normalization_of_continuum_wave_fun(psi, energy, r):
-    mu = reduced_mass_d2
-    k = math.sqrt(2*mu*energy)/hbar
-    s = math.sin(k*r[-1])
-    c = math.cos(k*r[-1])
-    sd = k*c
-    cd = -k*s
+#def normalization_of_continuum_wave_fun(psi, energy):
 
-    dr = r[1]-r[0]
-    F = psi[-1]
-    Fd = (3*psi[-1]-4*psi[-2]+psi[-3])/(2*dr)
 
-    A = (F*sd-Fd*s)/(c*sd-cd*s)
-    B = (F*cd-Fd*c)/(s*cd-sd*c)
-    #print("ormalization_of_continuum_wave_fun "+str(math.sqrt((A**2+B**2)*math.pi*k)))
-    return math.sqrt((A**2+B**2)*math.pi*k)
-    #return np.sqrt(k)
+
+
+    #mu = reduced_mass_d2
+    #k = math.sqrt(2*mu*energy)/hbar
+    # s = math.sin(k*r[-1])
+    # c = math.cos(k*r[-1])
+    # sd = k*c
+    # cd = -k*s
+    #
+    # dr = r[1]-r[0]
+    # F = psi[-1]
+    # Fd = (3*psi[-1]-4*psi[-2]+psi[-3])/(2*dr)
+    #
+    # A = (F*sd-Fd*s)/(c*sd-cd*s)
+    # B = (F*cd-Fd*c)/(s*cd-sd*c)
+    # #print("ormalization_of_continuum_wave_fun "+str(math.sqrt((A**2+B**2)*math.pi*k)))
+    # return math.sqrt((A**2+B**2)*math.pi*k)
     #return 1
 
-def normalize_continuum_wave_fun(psi, energy, r):
-    psi_normalized = psi/normalization_of_continuum_wave_fun(psi, energy, r)
-    return psi_normalized
+# def normalize_continuum_wave_fun(psi, energy):
+#     psi_normalized = psi/normalization_of_continuum_wave_fun(psi, energy)
+#     return psi_normalized
+
+def normalize_continuum_wave_fun(r, psi, energy):
+
+    #Find amplitude of sin in psi "at infinity"
+    r = r/bohr_to_meter
+    psi_f = interp1d(r, psi, kind=0, fill_value=0, bounds_error = False)
+
+    root_found = False
+    root1 = 0
+    root2 = r[-1]
+    r_idx = r.size-1
+
+    while not root_found and r_idx > 0:
+
+        try:
+            #print("r_left "+str(r[r_idx-1])+"r_right "+str(r[r_idx]))
+            root1 = sp.optimize.brentq(psi_f, r[r_idx-1], r[r_idx])
+            root_found = True
+        except:
+            pass
+        r_idx = r_idx-1
+
+    print("root1 "+str(root1)+" root2 "+str(root2))
+
+    f = lambda r: -np.abs(psi_f(r))
+    opt_res = sp.optimize.minimize_scalar(f, bracket=(root1, root2))
+    psi_amplitude = -f(opt_res.x)
+    #psi_amplitude = np.abs(psi_f((root2-root1)/2.0+root1))
+    # plt.plot(r, f(r))
+    # plt.plot(r, psi_f(r))
+    # print("Amplitude "+str(psi_amplitude))
+    # plt.plot(r, psi_amplitude*np.ones(r.size))
+    # plt.show()
+
+
+    psi = psi/psi_amplitude
+    k = math.sqrt(2*reduced_mass_d2*energy)/hbar
+    # k dimension 1/L
+    # hbar**2 k**2/(2m) = E
+    # hbar = E.T
+    # k = sqrt(M/(E T^2)) = sqrt(1/L^2)  = 1/L
+    # E = M*L^2/T^2
+    #psi = math.sqrt(2*reduced_mass_d2/(math.pi*hbar**2*k))*psi
+    psi = math.sqrt(2*reduced_mass_d2/(math.pi))*psi*10**22
+    #dim  of norm factor sqrt(M L/(E^2 T^2)) = sqrt(T^2/(M L^3)) = sqrt(1/(E L))
+
+    return psi
+
+
+
+
+# def normalize_continuum_wave_fun(idx, wave_fun, eigen_values,r_max):
+#
+#     if idx == 0:
+#         idx = idx+1
+#     elif idx == (eigen_values.size-1):
+#         idx = idx-1
+#
+#     #bsplines_dos = r_max/(math.pi*np.sqrt(2*eigen_values[idx]))
+#     # print(bsplines_dos)
+#     azero = 0.529*10**-10
+#     adim = hbar*3*10**8/azero
+#     density_of_states = 2*adim/(eigen_values[idx+1]-eigen_values[idx-1])#/electron_charge
+#     # print(density_of_states)
+#     #return wave_fun*bsplines_dos/density_of_states*np.sqrt(density_of_states)*electron_charge
+#     return wave_fun*np.sqrt(density_of_states)#*1.89794045821*10**-8 #/density_of_states*np.sqrt(density_of_states)*electron_charge
 
 def wave_fun_norm(psi, dr):
     return math.sqrt(wave_fun_scalar_prod(psi, psi, dr))
@@ -277,7 +384,7 @@ def idx_of_lower_E_max(values, value, percent_less):
 #def numerov(pot_file_path, is_bound_potential, E_max, reduced_mass,
 #r_end_for_unbound_potential=10, refine=1, pot_in_au=False, auto_E_max=True):
 
-def numerov(NumerovParams):
+def numerov(NumerovParams, use_cache = True):
 
     (pot_file_path, is_bound_potential, E_max, reduced_mass,
     r_end_for_unbound_potential, refine, pot_in_au, auto_E_max) = \
@@ -287,15 +394,16 @@ def numerov(NumerovParams):
 
     numerov_save_path = NumerovParams.to_string()+".pkl"
 
-    try:
-        print("Checking Numerov cache...")
-        input = open(numerov_save_path, 'rb')
-        numerov_res = pickle.load(input)
-        print("Numerov results retrieved from cache.")
-        input.close()
-        return numerov_res
-    except:
-        print("Numerov results not found in cache, I will now compute them.")
+    if use_cache:
+        try:
+            print("Checking Numerov cache...")
+            input = open(numerov_save_path, 'rb')
+            numerov_res = pickle.load(input)
+            print("Numerov results retrieved from cache.")
+            input.close()
+            return numerov_res
+        except:
+            print("Numerov results not found in cache, I will now compute them.")
 
     pot_file = np.loadtxt(POTENTIALS_DIR+"/"+pot_file_path)
 
@@ -370,6 +478,27 @@ def numerov(NumerovParams):
     KE = -sp.sparse.linalg.inv(B).dot(A)*hbar**2/(2.0*reduced_mass)
     H = (KE + sp.sparse.diags(V(r), offsets=0)).todense()
 
+    ###### Change basis to bsplines
+
+    # #n+1 nodes, n-p functions of degree p in basis, n-p control points
+    # curve = gaussian(1, (r[-1]-r[0])/2.0, 10**-10, r)
+    # #plt.plot(r, curve)
+    # #plt.show()
+    # (t, c, k) = interpolate.splrep(r, curve)
+    #
+    # change_basis_m = np.zeros((n,n))
+    #
+    # def eval_bs(i, r):
+    #     coef = np.zeros(c.size)
+    #     coef[i] = 1
+    #     bs = interpolate.BSpline(t,coef,k)
+    #     return bs(r)
+    #
+    # for i in range(0,n):
+    #     change_basis_m[i] = eval_bs(i, r)
+    #
+    # H = change_basis_m*H#*np.linalg.inv(change_basis_m)
+
     print("Computing eigenvalues and eigenvectors of Hamiltonian.")
     #eigen_values, eigen_vectors = sp.sparse.linalg.eigs(H, k=n-2, which="SM")
     eigen_values, eigen_vectors = np.linalg.eig(H)
@@ -389,17 +518,21 @@ def numerov(NumerovParams):
 
     eigen_vectors = []
 
-    c = 0
+    #r_max = V_E_intersect_right/bohr_to_meter
+
+    idx = 0
     for ev_fat in eigen_vectors_temp:
-        #ev = np.real(ev) #Required using eig for sparce matrix
         ev = ev_fat[0]
+        ev = np.real(ev) #Required using eig for sparce matrix
         if is_bound_potential:
             eigen_vectors.append(ev/wave_fun_norm(ev, dr))
-        else:
-            eigen_vectors.append(normalize_continuum_wave_fun(ev, eigen_values[c]-E_min, r))
-        c = c+1
+        else: #r, psi, energy
+            eigen_vectors.append(normalize_continuum_wave_fun(r, ev, eigen_values[idx]-E_min))
+            #eigen_vectors.append(normalize_continuum_wave_fun(idx, ev, eigen_values, V_E_intersect_right))
+        idx = idx+1
 
     eigen_vectors = np.asarray(eigen_vectors)
+    print(len(eigen_vectors))
     eigen_values = eigen_values/electron_charge#-shift
 
     print("Eigenvalues:")
@@ -410,13 +543,14 @@ def numerov(NumerovParams):
     res = NumerovResult(r_bohr, V, eigen_values, eigen_vectors)
 
     #Save Numerov result in cache
-    try:
-        output = open(numerov_save_path, "wb")
-        pickle.dump(res, output, pickle.HIGHEST_PROTOCOL)
-        output.close()
-    except Exception as e:
-        print("Pickle failed to save Numerov results.")
-        print(e)
+    if use_cache:
+        try:
+            output = open(numerov_save_path, "wb")
+            pickle.dump(res, output, pickle.HIGHEST_PROTOCOL)
+            output.close()
+        except Exception as e:
+            print("Pickle failed to save Numerov results.")
+            print(e)
 
     return res
 
@@ -444,10 +578,10 @@ def interpolate_eigen_vec_array(ev_array, r):
 #
 def final_dissoc_state(eigen_values_free, eigen_vectors_free, E, r_bohr):
 
-    delta_E = eigen_values_free[1]-eigen_values_free[0]
-
-    if E < eigen_values_free[0]-delta_E:
-       return (0, np.zeros(eigen_vectors_free[0].size))
+    # delta_E = eigen_values_free[1]-eigen_values_free[0]
+    #
+    # if E < eigen_values_free[0]-delta_E:
+    #    return (0, np.zeros(eigen_vectors_free[0].size))
 
     # if E < eigen_values_free[0]:
     #     eigen_vec = eigen_vectors_free[0]
@@ -459,7 +593,7 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E, r_bohr):
     #     return (E, eigen_vec)
 
     i = np.abs(eigen_values_free-E).argmin()
-    return (eigen_values_free[i], eigen_vectors_free[i])
+    return i
 
 #
 # bound_vib_level_distrib: a function, gives proba for bound molecule to be
@@ -472,7 +606,7 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E, r_bohr):
 # bounded_state_IP: ionisation potential of molecule bounded state in eV
 #
 def ker_dissoc(numerov_res_bound, numerov_res_free, bound_vib_level_distrib, E,
-bounded_state_IP, gamma=1.547):
+franck_condon_matrix):
 
     eigen_values_bound = numerov_res_bound.eigen_values
     eigen_vectors_bound = numerov_res_bound.eigen_vectors
@@ -487,11 +621,11 @@ bounded_state_IP, gamma=1.547):
 
     #Find dissociated state from the inter-atomic distance in the
     #bound state
-    (E_final_state, final_free_state) = final_dissoc_state(eigen_values_free,
+    ev_f_idx = final_dissoc_state(eigen_values_free,
     eigen_vectors_free, E, r_bohr_free)
-    final_free_statef = interp1d(r_bohr_free, final_free_state,
-    kind=0,fill_value=0, bounds_error = False)
-    final_free_state = final_free_statef(r_bohr_bound)
+    #final_free_statef = interp1d(r_bohr_free, final_free_state,
+    #kind=0,fill_value=0, bounds_error = False)
+    #final_free_state = final_free_statef(r_bohr_bound)
 
     for ev_b_idx in range(0, eigen_values_bound.size):
 
@@ -504,29 +638,35 @@ bounded_state_IP, gamma=1.547):
         #Transition probability = scalar product between initial and
         #final states
         #trans_proba_squared = wave_fun_scalar_prod(e_vec_b, final_free_state, dr_bound)**2
-        trans_proba_squared = wave_fun_scalar_prod(e_vec_b*r_bohr_bound, final_free_state, dr_bound)**2
+        #trans_proba_squared = wave_fun_scalar_prod(e_vec_b*r_bohr_bound, final_free_state, dr_bound)**2
 
         #sigma = 0.05/math.sqrt(2*math.log(2))
 
         #divide by cosh: remove from probability the fact that you can form a
         #bounded D2 molecule 1/cosh((E(eV)-E_res)/1.547)^2
-        E_res = e_val_b-bounded_state_IP
-        p_E = p_E+proba_v*trans_proba_squared/math.cosh((E-E_res)/gamma)**2
+        #E_res = e_val_b-bounded_state_IP
+        #p_E = p_E+proba_v*trans_proba_squared/math.cosh((E-E_res)/gamma)**2
 
-        #*math.exp(-(E-E_final_state)**2/(2*sigma**2))/0.106447
+        #exp_exp = math.exp(-(E-E_final_state)**2/(2*sigma**2))/0.106447
 
         # print("E "+str(E))
         # print("E final state "+str(E))
         # print(math.exp(-(E-E_final_state)**2/(2*sigma**2))/0.106447)
 
-        # f = lambda x: V_free(x)-E
-        # r_star_bohr = sp.optimize.brentq(f, 0, 10)
-        #
-        # dr = (r_bohr_free[1]-r_bohr_free[0])
-        # V_free_deriv = np.abs((V_free(r_star_bohr+dr)-V_free(r_star_bohr))/dr)
-        #
-        # e_vec_b_f = interp1d(r_bohr_bound, e_vec_b, kind=0,fill_value="extrapolate")
-        # p_E = p_E + proba_v*r_star_bohr*e_vec_b_f(r_star_bohr)**2/V_free_deriv
+        f = lambda x: V_free(x)-E
+        r_star_bohr = sp.optimize.brentq(f, 0, 10)
+
+        dr = (r_bohr_free[1]-r_bohr_free[0])
+        #V_free_deriv = np.abs((V_free(r_star_bohr+dr)-V_free(r_star_bohr-dr))/(2*dr))
+        V_free_deriv = np.abs(-V_free(r_star_bohr+2*dr)+8*V_free(r_star_bohr+dr) \
+        -8*V_free(r_star_bohr-dr)+V_free(r_star_bohr-2*dr))/(12*dr)
+
+        #e_vec_b_f = interp1d(r_bohr_bound, e_vec_b, kind=0, fill_value=0, bounds_error = False)
+        #plt.plot(r_bohr_free, e_vec_b_f(r_bohr_free))
+        #plt.show()
+        #p_E = p_E + proba_v*r_star_bohr*e_vec_b_f(r_star_bohr)**2/V_free_deriv
+        p_E = p_E + proba_v*franck_condon_matrix[ev_b_idx,ev_f_idx]/V_free_deriv
+
         #p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv
 
         #if E < 0.02:
@@ -714,15 +854,15 @@ def exp_theo_error_wrap(tuple_params):
     (ker_exp, numerov_res_bound, numerov_res_free, alpha, gamma) = tuple_params
     return exp_theo_error(ker_exp, numerov_res_bound, numerov_res_free, alpha, gamma)
 
-def ker_to_fit(fixed_params, alpha, gamma=1.54):
+def ker_to_fit(fixed_params, alpha):
 
-    (energies, numerov_res_D2P, numerov_res_D2B) = fixed_params
+    (energies, numerov_res_D2P, numerov_res_D2B, franck_condon_matrix) = fixed_params
 
     p_e = np.zeros(energies.size)
     for i in range(0, p_e.size):
         p_e[i] = alpha*ker_dissoc(numerov_res_D2P, numerov_res_D2B,
         D2_plus_vib_level_distrib(numerov_res_D2P.eigen_values), energies[i],
-        ionisation_potential_d2, gamma)
+        franck_condon_matrix)
     return p_e
 
 def comp_franck_condon_matrix(numerov_res_i, numerov_res_f):
@@ -768,7 +908,7 @@ def comp_franck_condon_matrix(numerov_res_i, numerov_res_f):
 
     return franck_condon_matrix
 
-def energy_diff_matrix(numerov_res_i, numerov_res_f):
+def energy_diff_matrix(numerov_res_i, numerov_res_f, energy_shift=0):
 
     (r_bohr_i, V_i, eigen_values_i, eigen_vectors_i) = (numerov_res_i.r_bohr,
     numerov_res_i.V, numerov_res_i.eigen_values, numerov_res_i.eigen_vectors)
@@ -779,7 +919,7 @@ def energy_diff_matrix(numerov_res_i, numerov_res_f):
 
     for i in range(0,len(eigen_vectors_i)):
         for j in range(0,len(eigen_vectors_f)):
-            Ei_minus_Ef[i,j] = eigen_values_i[i]-eigen_values_f[j]-0.754
+            Ei_minus_Ef[i,j] = eigen_values_i[i]-eigen_values_f[j]+energy_shift#-0.754
 
     return Ei_minus_Ef
 
@@ -823,10 +963,10 @@ franck_condon_matrix, Ei_minus_Ef):
     return ker_of_E
 
 def comp_ker_vector(numerov_params_i, numerov_params_f, vib_level_distrib_i,
-energies):
+energies, energy_shift=0):
 
     ker_cache_key = numerov_params_i.to_string()+" "+numerov_params_f.to_string() \
-    +" "+vib_level_distrib_i.__name__+" "+str(energies)
+    +" "+vib_level_distrib_i.__name__+" "+str(energies)+" "+str(energy_shift)
 
     try:
         print("Checking KER cache...")
@@ -844,7 +984,7 @@ energies):
 
     numerov_res_i = numerov(numerov_params_i)
     numerov_res_f = numerov(numerov_params_f)
-
+    #plt.show()
     #numerov_res_f.plot()
 
     # plot_bound_and_free(numerov_res_i.eigen_vectors, numerov_res_i.eigen_values,
@@ -858,7 +998,8 @@ energies):
     vib_level_distrib_i = vib_level_distrib_i(numerov_res_i.eigen_values)
 
     franck_condon_matrix = comp_franck_condon_matrix(numerov_res_i, numerov_res_f)
-    Ei_minus_Ef_matrix = energy_diff_matrix(numerov_res_i, numerov_res_f)
+    Ei_minus_Ef_matrix = energy_diff_matrix(numerov_res_i, numerov_res_f,
+    energy_shift)
 
     events_nbr = np.zeros(energies.size)
 
