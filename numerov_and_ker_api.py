@@ -36,6 +36,7 @@ KER_SAVE_FILE = "cache_pkl/computed_ker.pkl"
 Q_R_PATH = "data/q_wrt_r.txt"
 
 POTENTIALS_DIR = "data"
+D2P_POTENTIAL_FILE_DISSOC = "pot_d2+.txt"
 D2P_POTENTIAL_FILE = "pot_d2+_shifted.txt"
 D2DISSOC_POTENTIAL_FILE = "pot_d2_b.txt"
 D2X_1SG_POTENTIAL_FILE = "d2_x_1sg.txt" #Ground state
@@ -138,8 +139,10 @@ refine = 2
 #r_end_for_unbound_potential=10, refine=1, pot_in_au, auto_E_max
 D2P_NUMEROV_PARAMS = NumerovParams(D2P_POTENTIAL_FILE, True, E_max_bound_states_D2p,
 reduced_mass_d2, 10, refine, False, True)
+D2P_NUMEROV_PARAMS_DISSOC = NumerovParams(D2P_POTENTIAL_FILE_DISSOC, True, E_max_bound_states_D2p,
+reduced_mass_d2, 10, refine, False, True)
 D2B_NUMEROV_PARAMS = NumerovParams(D2DISSOC_POTENTIAL_FILE, False, E_max_bound_states_D2b,
-reduced_mass_d2, 10, 1, False, False)
+reduced_mass_d2, 30, refine, False, False)
 D2X_1SG_NUMEROV_PARAMS = NumerovParams(D2X_1SG_POTENTIAL_FILE, True,
 0, reduced_mass_d2, 0, refine, True, True)
 D2STAR_GK1SG_NUMEROV_PARAMS = NumerovParams(D2STAR_GK1SG_POTENTIAL_FILE, True,
@@ -193,7 +196,7 @@ D2STAR_1_PI_GR_NUMEROV_PARAMS = NumerovParams(D2STAR_1_PI_GR_POTENTIAL_FILE, Tru
 q_r_data = np.loadtxt(Q_R_PATH)
 r = q_r_data[:,0]
 q = q_r_data[:,1]
-q_r = interp1d(r,q,kind="linear",fill_value="extrapolate")
+q_r_bound_to_bound = interp1d(r,q,kind="linear",fill_value="extrapolate")
 
 #q_r = lambda x: 1
 
@@ -256,7 +259,7 @@ def normalize_continuum_wave_fun(r, psi, energy):
             pass
         r_idx = r_idx-1
 
-    print("root1 "+str(root1)+" root2 "+str(root2))
+    #print("root1 "+str(root1)+" root2 "+str(root2))
 
     f = lambda r: -np.abs(psi_f(r))
     opt_res = sp.optimize.minimize_scalar(f, bracket=(root1, root2))
@@ -271,13 +274,20 @@ def normalize_continuum_wave_fun(r, psi, energy):
 
     psi = psi/psi_amplitude
     k = math.sqrt(2*reduced_mass_d2*energy)/hbar
+    #print("k "+str(k))
     # k dimension 1/L
     # hbar**2 k**2/(2m) = E
     # hbar = E.T
     # k = sqrt(M/(E T^2)) = sqrt(1/L^2)  = 1/L
     # E = M*L^2/T^2
+
     #psi = math.sqrt(2*reduced_mass_d2/(math.pi*hbar**2*k))*psi
-    psi = math.sqrt(2*reduced_mass_d2/(math.pi))*psi*10**22
+
+    psi = 1/math.sqrt(hbar)*math.sqrt(math.sqrt(2*reduced_mass_d2)/(math.pi*math.sqrt(energy)))*psi
+    psi = psi*math.sqrt(bohr_to_meter*electron_charge)#*au_to_ev)
+
+    #psi = psi/math.sqrt(k)
+
     #dim  of norm factor sqrt(M L/(E^2 T^2)) = sqrt(T^2/(M L^3)) = sqrt(1/(E L))
 
     return psi
@@ -595,6 +605,16 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E, r_bohr):
     i = np.abs(eigen_values_free-E).argmin()
     return i
 
+def q_I(delta_I_eV):
+    b = 1.4
+    ang_coef = (7.1-b)/(-5+9)
+    if delta_I_eV < -9:
+        return b
+    else:
+        return b+(delta_I_eV+9)*ang_coef
+
+
+
 #
 # bound_vib_level_distrib: a function, gives proba for bound molecule to be
 #               in vibrational state of energy E
@@ -627,6 +647,10 @@ franck_condon_matrix):
     #kind=0,fill_value=0, bounds_error = False)
     #final_free_state = final_free_statef(r_bohr_bound)
 
+
+    f = lambda x: V_free(x)-E
+    r_star_bohr = sp.optimize.brentq(f, 0, 10)
+
     for ev_b_idx in range(0, eigen_values_bound.size):
 
         e_val_b = eigen_values_bound[ev_b_idx]
@@ -653,19 +677,35 @@ franck_condon_matrix):
         # print("E final state "+str(E))
         # print(math.exp(-(E-E_final_state)**2/(2*sigma**2))/0.106447)
 
-        f = lambda x: V_free(x)-E
-        r_star_bohr = sp.optimize.brentq(f, 0, 10)
-
-        dr = (r_bohr_free[1]-r_bohr_free[0])
+        dr = (r_bohr_free[1]-r_bohr_free[0])*25
         #V_free_deriv = np.abs((V_free(r_star_bohr+dr)-V_free(r_star_bohr-dr))/(2*dr))
         V_free_deriv = np.abs(-V_free(r_star_bohr+2*dr)+8*V_free(r_star_bohr+dr) \
         -8*V_free(r_star_bohr-dr)+V_free(r_star_bohr-2*dr))/(12*dr)
 
-        #e_vec_b_f = interp1d(r_bohr_bound, e_vec_b, kind=0, fill_value=0, bounds_error = False)
+        e_vec_b_f = interp1d(r_bohr_bound, e_vec_b, kind=0, fill_value=0, bounds_error = False)
         #plt.plot(r_bohr_free, e_vec_b_f(r_bohr_free))
         #plt.show()
         #p_E = p_E + proba_v*r_star_bohr*e_vec_b_f(r_star_bohr)**2/V_free_deriv
-        p_E = p_E + proba_v*franck_condon_matrix[ev_b_idx,ev_f_idx]/V_free_deriv
+        #delta_I_eV = E-e_val_b
+        #delta_I_eV = E - e_val_b + 0.754
+        #delta_I_eV = E - e_val_b - 0.754
+
+        #X.U.: Dans le cas D2+ + gaz résiduel = D2, l'écart est la différence
+        #d'énergie entre l'état initial, D2+(v+) +D2(v=0) et l'état final,
+        #D2 dissociatif + D2+(v+).
+        #Dans l'hypothèse minimale, selon laquelle l'ionisation de D2 se fait
+        #vers D2+(v+=0), l'écart en énergie entre état initial et final est la
+        #différence d'énergie entre l'état v+ de départ et l'énergie de
+        #dissociation finale, moins le potentiel d'ionisation de D2, 15.4 eV environ.
+
+        delta_I_eV = e_val_b-E-15.4
+        #print(delta_I_eV)
+        #E_res = e_val_b-bounded_state_IP
+
+        #if (e_vec_b_f(r_star_bohr)**2) < 0.01:
+        #    print(e_vec_b_f(r_star_bohr)**2)
+        p_E = p_E + proba_v*franck_condon_matrix[ev_b_idx,ev_f_idx]*q_I(delta_I_eV)
+        #p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv*q_I(delta_I_eV)
 
         #p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv
 
@@ -865,7 +905,7 @@ def ker_to_fit(fixed_params, alpha):
         franck_condon_matrix)
     return p_e
 
-def comp_franck_condon_matrix(numerov_res_i, numerov_res_f):
+def comp_franck_condon_matrix(numerov_res_i, numerov_res_f, q_r = lambda r: 1):
 
     (r_bohr_i, V_i, eigen_values_i, eigen_vectors_i) = (numerov_res_i.r_bohr,
     numerov_res_i.V, numerov_res_i.eigen_values, numerov_res_i.eigen_vectors)
@@ -997,7 +1037,8 @@ energies, energy_shift=0):
 
     vib_level_distrib_i = vib_level_distrib_i(numerov_res_i.eigen_values)
 
-    franck_condon_matrix = comp_franck_condon_matrix(numerov_res_i, numerov_res_f)
+    franck_condon_matrix = comp_franck_condon_matrix(numerov_res_i,
+    numerov_res_f, q_r_bound_to_bound)
     Ei_minus_Ef_matrix = energy_diff_matrix(numerov_res_i, numerov_res_f,
     energy_shift)
 
