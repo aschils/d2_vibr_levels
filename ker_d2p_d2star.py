@@ -182,7 +182,8 @@ c_up_bound = 1/math.sqrt(2*math.log(2))
 not_zero_idx = energies > 0.5
 energies =  energies[not_zero_idx]
 
-ker_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 0.01/2, "GK1SG", 2, 0),
+ker_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 0.09/20, "GK1SG", 2, 0),
+(D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 0, 0.5),
 (D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 0, 0.5),
 (D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 0, 1),
 (D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 1, 0.5),
@@ -206,7 +207,7 @@ plt.plot(energies_exp, ker_exp)
 for i in range(0, len(futures)):
     (numerov_params, scale_coef, label, L, S) = ker_states[i]
     ker = futures[i].result()
-    plt.plot(energies, ker*scale_coef, label=label+str(L)+str(S))
+    plt.plot(energies, ker*scale_coef, label=label+" L "+str(L)+" S "+str(S))
 plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
 
 plt.show()
