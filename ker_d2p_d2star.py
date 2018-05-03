@@ -184,7 +184,8 @@ energies =  energies[not_zero_idx]
 
 ker_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 0.03/5, "GK1SG", 2, 0),
 (D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 1, 0),
-(D2STAR_2_3SU_NUMEROV_PARAMS, 0.001, "2_3SU", 1, 1)
+(D2STAR_2_3SU_NUMEROV_PARAMS, 0.001, "2_3SU", 1, 1),
+(D2STAR_1PI_U_C_NUMEROV_PARAMS, 0.001, "1PI_U_C", 1, 0)
 ]
 
 def ker_f(params):
