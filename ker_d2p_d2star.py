@@ -198,7 +198,7 @@ def ker_f(params):
     return comp_ker_vector(D2P_NUMEROV_PARAMS,
     MolecularState(numerov_params, 0, L, S), D2_plus_vib_level_distrib, energies,energy_shift, use_cache = True)
 
-executor = concurrent.futures.ProcessPoolExecutor(4)
+executor = concurrent.futures.ProcessPoolExecutor(8)
 futures = [executor.submit(ker_f, ker_state) for ker_state in ker_states]
 concurrent.futures.wait(futures)
 
