@@ -182,7 +182,7 @@ c_up_bound = 1/math.sqrt(2*math.log(2))
 not_zero_idx = energies > 0.5
 energies =  energies[not_zero_idx]
 
-ker_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 0.09/20, "GK1SG", 2, 0),
+ker_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 0.03/5, "GK1SG", 2, 0),
 (D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 0, 0.5),
 (D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 0, 0.5),
 (D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 0, 1),
