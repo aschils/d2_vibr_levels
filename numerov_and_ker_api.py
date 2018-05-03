@@ -69,6 +69,7 @@ EXP_KER_PATH = "data/ker_d2_d.txt"
 #Definition of physical constants
 h = 6.626*10**-34 #Planck Constant [J s]
 hbar = h/(2*math.pi)
+m_e = 9.10938356*10**-31 #electron mass [kg]
 m_p = 1.672*10**-27 #Proton mass [kg]
 reduced_mass_d2 = m_p #approximation of D_2 reduced mass [kg]
 reduced_mass_he2 = 2*m_p
@@ -133,6 +134,27 @@ class NumerovResult:
             of.write("\n")
         of.close()
 
+class MolecularState:
+
+    def __init__(self, numerov_params, electron_binding_energy = 0,
+    electron_angular_momentum = 0, total_spin = 0):
+        self.numerov_params = numerov_params
+        self.electron_binding_energy = electron_binding_energy #E_A
+        self.electron_angular_momentum = electron_angular_momentum #lambda
+        self.total_spin = total_spin
+
+    #Getters
+    def get_numerov_params(self):
+        return self.numerov_params
+
+    def get_electron_binding_energy(self):
+        return self.electron_binding_energy
+
+    def get_electron_angular_momentum(self):
+        return self.electron_angular_momentum
+
+    def get_total_spin(self):
+        return self.total_spin
 
 refine = 2
 #pot_file_path, is_bound_potential, E_max, reduced_mass,
@@ -190,7 +212,8 @@ D2STAR_1_PI_GI_NUMEROV_PARAMS = NumerovParams(D2STAR_1_PI_GI_POTENTIAL_FILE, Tru
 D2STAR_1_PI_GR_NUMEROV_PARAMS = NumerovParams(D2STAR_1_PI_GR_POTENTIAL_FILE, True,
 0, reduced_mass_d2, 10, refine, True, True)
 
-
+D2STAR_GK1SG_MS = MolecularState(D2STAR_GK1SG_NUMEROV_PARAMS, 1.646/au_to_ev, 2, 0)
+D2STAR_1_SU_BP_MS = MolecularState(D2STAR_1_SU_BP_NUMEROV_PARAMS, 0, 0, 0)
 
 
 q_r_data = np.loadtxt(Q_R_PATH)
@@ -198,12 +221,13 @@ r = q_r_data[:,0]
 q = q_r_data[:,1]
 q_r_bound_to_bound = interp1d(r,q,kind="linear",fill_value="extrapolate")
 
-#q_r = lambda x: 1
+q_r_bound_to_bound = lambda x: 1
 
 def gaussian(a, b, c, x):
     return a*np.exp(-((x-b)/c)**2/2)
 
 # <psi1 | psi2> = int_{-\infty}^{\infty} psi1(r)^* psi2(r) dr
+#Integrate using trapeze method (MUCH faster than using scipy.quad...)
 def wave_fun_scalar_prod(psi1, psi2, dr):
     # f = psi1*psi2
     #
@@ -552,6 +576,9 @@ def numerov(NumerovParams, use_cache = True):
     V = interp1d(r_init,V_init,kind="linear",fill_value="extrapolate")
     res = NumerovResult(r_bohr, V, eigen_values, eigen_vectors)
 
+    #print("norm in numerov "+str(wave_fun_scalar_prod(eigen_vectors[3],
+    #eigen_vectors[3], r[1]-r[0])))
+
     #Save Numerov result in cache
     if use_cache:
         try:
@@ -605,23 +632,21 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E, r_bohr):
     i = np.abs(eigen_values_free-E).argmin()
     return i
 
-def q_I(delta_I_eV):
-    b = 1.4
-    ang_coef = (7.1-b)/(-5+9)
-    if delta_I_eV < -9:
-        return b
-    else:
-        return b+(delta_I_eV+9)*ang_coef
+def q_I(delta_I_eV,bound_eval):
+    # b = 1.4
+    # ang_coef = (7.1-b)/(-5+9)
+    # if delta_I_eV < -9:
+    #     return b
+    # else:
+    #     return b+(delta_I_eV+9)*ang_coef
+    return 1/math.cosh(0.191*delta_I_eV)**2
+    #return 1/math.cosh(17.1/math.sqrt(bound_eval)*delta_I_eV)**2
 
 
 
 #
 # bound_vib_level_distrib: a function, gives proba for bound molecule to be
 #               in vibrational state of energy E
-# r_bohr_bound: numerov numerical domain used to computed bounded wave functions
-#              solutions of Schrodinger with bound potential (bohr)
-# r_bohr_free: numerov numerical domain used to computed free wave functions
-#              solutions of Schrodinger with unbound potential (bohr)
 # E: energy for which we want p(E), proba to observe kinetic energy E
 # bounded_state_IP: ionisation potential of molecule bounded state in eV
 #
@@ -704,7 +729,8 @@ franck_condon_matrix):
 
         #if (e_vec_b_f(r_star_bohr)**2) < 0.01:
         #    print(e_vec_b_f(r_star_bohr)**2)
-        p_E = p_E + proba_v*franck_condon_matrix[ev_b_idx,ev_f_idx]*q_I(delta_I_eV)
+        p_E = p_E + proba_v*franck_condon_matrix[ev_b_idx,ev_f_idx]*q_I(delta_I_eV, e_val_b)
+
         #p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv*q_I(delta_I_eV)
 
         #p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv
@@ -860,6 +886,18 @@ def D2_plus_vib_level_distrib(eigen_values_bound):
     #proba_of_E = lambda E: proba_of_levels[np.abs(eigen_values_bound-E).argmin()]
     return proba_of_E
 
+def only_ground_state_vib_level_distrib(eigen_values_bound):
+    def proba_of_E(E):
+        i = np.abs(eigen_values_bound-E).argmin()
+        if i == 0:
+            return 1
+        else:
+            return 0
+    #proba_of_E = lambda E: proba_of_levels[np.abs(eigen_values_bound-E).argmin()]
+    return proba_of_E
+
+
+
 ########### In this part will fit exp ker D_2^+ + D^- -> D+D +D ? with theo ker #######################
 
 #
@@ -965,8 +1003,8 @@ def energy_diff_matrix(numerov_res_i, numerov_res_f, energy_shift=0):
 
 #Compute ker but for case such as D^- + D_2^+ -> D_2^* + D
 #ker is different w.r.t to prev case
-def ker(E, bound_vib_level_distrib, numerov_res_i, numerov_res_f,
-franck_condon_matrix, Ei_minus_Ef):
+def ker(E, bound_vib_level_distrib, numerov_res_i, molecular_state, numerov_res_f,
+landau_zener_matrix, Ei_minus_Ef):
 
     (r_bohr_i, V_i, eigen_values_i, eigen_vectors_i) = (numerov_res_i.r_bohr,
     numerov_res_i.V, numerov_res_i.eigen_values, numerov_res_i.eigen_vectors)
@@ -988,8 +1026,22 @@ franck_condon_matrix, Ei_minus_Ef):
             #val_list.append(proba_v*franck_condon_matrix[i, j]* \
             #math.exp(-(E-Ei_minus_Ef[i,j])**2/(2*sigma**2))/0.106447)
 
-            ker_of_E = ker_of_E + proba_v*franck_condon_matrix[i, j]* \
-            math.exp(-(E-Ei_minus_Ef[i,j])**2/(2*sigma**2))/0.106447
+            if Ei_minus_Ef[i,j] > 0:
+
+                #new_contrib = proba_v*franck_condon_matrix[i, j]* \
+                # new_contrib = proba_v* \
+                # math.exp(-(E-Ei_minus_Ef[i,j])**2/(2*sigma**2))/0.106447
+                #
+                # if enable_landau_zener:
+                #     lz = landau_zener(molecular_state, Ei_minus_Ef[i,j], E_As[i,j],
+                #     franck_condon_matrix[i, j])
+                #     new_contrib = new_contrib*lz
+                #
+                # ker_of_E = ker_of_E + new_contrib
+                ker_of_E = ker_of_E + proba_v* \
+                math.exp(-(E-Ei_minus_Ef[i,j])**2/(2*sigma**2))/0.106447* \
+                landau_zener_matrix[i,j]
+                #landau_zener(H_interaction_matrix[i,j], R_au)
 
     # val_list = np.array(val_list)
     # max_index = np.argmax(val_list)
@@ -1002,24 +1054,136 @@ franck_condon_matrix, Ei_minus_Ef):
 
     return ker_of_E
 
-def comp_ker_vector(numerov_params_i, numerov_params_f, vib_level_distrib_i,
-energies, energy_shift=0):
+def H(molecular_state, E_A, R):
+    #noramlization constant of the asymptotic radial wavefunction of active
+    #electron in initial H^-
+    A_i = 1.12
+    #Electron binding energy of final state H_2 in H_2^+ + H_^- -> H_2 + H
+    #E_A = molecular_state.get_electron_binding_energy()
 
-    ker_cache_key = numerov_params_i.to_string()+" "+numerov_params_f.to_string() \
-    +" "+vib_level_distrib_i.__name__+" "+str(energies)+" "+str(energy_shift)
+    L = molecular_state.get_electron_angular_momentum()
+    S = molecular_state.get_total_spin()
 
-    try:
-        print("Checking KER cache...")
-        input = open(KER_SAVE_FILE, 'rb')
-        ker_cache = pickle.load(input)
-        print("KER cache loaded. Searching for key.")
-        events_nbr = ker_cache[ker_cache_key]
-        input.close()
-        return events_nbr
-    except IOError:
-        print("Unable to load KER cache from file "+KER_SAVE_FILE)
-    except KeyError:
-        print("Key not found in cache. Computing KER now then...")
+    #Factor resulting from coupling of initial and final state angular and spin
+    #momenta
+    D = math.sqrt((2*L+1)*(2*S+1))
+    E_A = E_A/au_to_ev
+    gamma = np.sqrt(2*E_A)
+
+
+    #R = au_to_ev/energy
+
+    #R = 30.493
+
+    # normalization constant of asymptotic radial wavefunction of active
+    #electron in final H_2
+    A_c = np.zeros(gamma.size)
+    for i in range(0, gamma.size):
+        if (1.0/gamma[i]-L) < 0:
+            print("Warning (1.0/gamma-L) < 0 in landau_zener, A_c set to 0.")
+            A_c[i] = 0
+        else:
+            A_c[i] = gamma[i]*(2*gamma[i])**(1.0/gamma[i])/np.sqrt(
+            sp.special.gamma(1.0/gamma[i]+L+1)*sp.special.gamma(1.0/gamma[i]-L))
+
+    #Calcul de H_ic
+    H_12 = 0.5*A_i*A_c*D*R**(1.0/gamma-1)*np.exp(-gamma*R)
+    return H_12
+
+
+# Use  H = int dr Psi_v_D2+  H(r)  Psi_v_D2
+# where H =
+def comp_landau_zener_matrix(numerov_res_i, molecular_state_f, numerov_res_f,
+Ei_minus_Ef_matrix, E_As):
+
+    (r_bohr_i, V_i, eigen_values_i, eigen_vectors_i) = (numerov_res_i.r_bohr,
+    numerov_res_i.V, numerov_res_i.eigen_values, numerov_res_i.eigen_vectors)
+    (r_bohr_f, V_f, eigen_values_f, eigen_vectors_f) = (numerov_res_f.r_bohr,
+    numerov_res_f.V, numerov_res_f.eigen_values, numerov_res_f.eigen_vectors)
+
+    #Compute numerical domain
+    r_left = 0
+    r_right = max(r_bohr_i[-1], r_bohr_f[-1])
+    dr = min(r_bohr_i[1]-r_bohr_i[0], r_bohr_f[1]-r_bohr_f[0])
+    r_bohr = np.linspace(r_left, r_right, (r_right-r_left)/dr)
+    dr = (r_bohr[1]-r_bohr[0])*bohr_to_meter
+
+    landau_zener_matrix = np.zeros((len(eigen_vectors_i), len(eigen_vectors_f)))
+
+    for i in range(0,len(eigen_vectors_i)):
+
+        ev_i = interp1d(r_bohr_i, eigen_vectors_i[i],
+        kind=0, fill_value=0, bounds_error = False)
+        ev_i_data = ev_i(r_bohr)
+
+        for j in range(0,len(eigen_vectors_f)):
+
+            ev_f = interp1d(r_bohr_f, eigen_vectors_f[j],
+            kind=0, fill_value=0, bounds_error = False)
+            ev_f_data = ev_f(r_bohr)
+
+            #Formula 1
+            # R_au = 30.493
+            # H_ic = 6.06*10**-3
+            # FCF = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)**2
+            # landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)*FCF
+
+            # #Formula 2
+            # R_au = 30.493
+            # H_r = H(molecular_state_f, np.array([E_As[i,j]]), R_au)
+            # S = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)
+            # H_ic = H_r*S
+            #
+            # #Formula 3
+            # R_au = au_to_ev/Ei_minus_Ef_matrix[i,j]
+            # H_r = H(molecular_state_f, np.array([E_As[i,j]]), R_au)
+            # S = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)
+            # H_ic = H_r*S
+            #
+            # #Formula 4
+            # R_au = 30.493
+            # E_A = V_i(r_bohr)-V_f(r_bohr)
+            # H_r = H(molecular_state_f, E_A, R_au)
+            # H_ic = wave_fun_scalar_prod(ev_i_data*H_r, ev_f_data, dr)
+            #
+            # #Formula 5
+            R_au = au_to_ev/Ei_minus_Ef_matrix[i,j]
+            E_A = V_i(r_bohr)-V_f(r_bohr)
+            H_r = H(molecular_state_f, E_A, R_au)
+            H_ic = wave_fun_scalar_prod(ev_i_data*H_r, ev_f_data, dr)
+
+            landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)
+
+    return landau_zener_matrix
+
+
+
+
+def comp_ker_vector(numerov_params_i, molecular_state_f,
+vib_level_distrib_i, energies, energy_shift=0, use_cache = True):
+
+    numerov_params_f = molecular_state_f.get_numerov_params()
+
+    if use_cache:
+
+        L =  molecular_state_f.get_electron_angular_momentum()
+        S = molecular_state_f.get_total_spin()
+        ker_cache_key = numerov_params_i.to_string()+" "+numerov_params_f.to_string() \
+        +" "+vib_level_distrib_i.__name__+" "+str(energies)+" "+str(energy_shift) \
+        +" "+str(L)+" "+str(S)
+
+        try:
+            print("Checking KER cache...")
+            input = open(KER_SAVE_FILE, 'rb')
+            ker_cache = pickle.load(input)
+            print("KER cache loaded. Searching for key.")
+            events_nbr = ker_cache[ker_cache_key]
+            input.close()
+            return events_nbr
+        except IOError:
+            print("Unable to load KER cache from file "+KER_SAVE_FILE)
+        except KeyError:
+            print("Key not found in cache. Computing KER now then...")
 
 
     numerov_res_i = numerov(numerov_params_i)
@@ -1036,37 +1200,204 @@ energies, energy_shift=0):
 
 
     vib_level_distrib_i = vib_level_distrib_i(numerov_res_i.eigen_values)
-
-    franck_condon_matrix = comp_franck_condon_matrix(numerov_res_i,
-    numerov_res_f, q_r_bound_to_bound)
+    #franck_condon_matrix = comp_franck_condon_matrix(numerov_res_i,
+    #numerov_res_f, q_r_bound_to_bound)
     Ei_minus_Ef_matrix = energy_diff_matrix(numerov_res_i, numerov_res_f,
     energy_shift)
+    E_As = electron_binding_energy_of_final_state_matrix(numerov_res_i,
+    numerov_res_f)
+    landau_zener_matrix = comp_landau_zener_matrix(numerov_res_i, molecular_state_f,
+    numerov_res_f, Ei_minus_Ef_matrix, E_As)
+
+
+    #executor = concurrent.futures.ProcessPoolExecutor(4)
+    #ker_f = lambda e: ker(e, vib_level_distrib_i, numerov_res_i,
+    #molecular_state_f, numerov_res_f, franck_condon_matrix,
+    #Ei_minus_Ef_matrix, E_As, enable_landau_zener)
+    #futures = [executor.submit(ker_f, energy) for energy in energies]
+    #concurrent.futures.wait(futures)
+
 
     events_nbr = np.zeros(energies.size)
-
     for i in range(0,energies.size):
         events_nbr[i] = ker(energies[i], vib_level_distrib_i, numerov_res_i,
-        numerov_res_f, franck_condon_matrix, Ei_minus_Ef_matrix)
+        molecular_state_f, numerov_res_f, landau_zener_matrix,
+        Ei_minus_Ef_matrix)
+        #events_nbr[i] = futures[i].result()
 
-    try:
-        input = open(KER_SAVE_FILE, 'rb')
-        ker_cache = pickle.load(input)
-        input.close()
-    except:
-        ker_cache = {}
+    if use_cache:
+        try:
+            input = open(KER_SAVE_FILE, 'rb')
+            ker_cache = pickle.load(input)
+            input.close()
+        except:
+            ker_cache = {}
 
-    ker_cache[ker_cache_key] = events_nbr
+        ker_cache[ker_cache_key] = events_nbr
 
-    try:
-        print("Save KER results in cache...")
-        output = open(KER_SAVE_FILE, "wb")
-        pickle.dump(ker_cache, output, pickle.HIGHEST_PROTOCOL)
-        output.close()
-    except Exception as e:
-        print("Pickle failed to save KER results.")
-        print(e)
+        try:
+            print("Save KER results in cache...")
+            output = open(KER_SAVE_FILE, "wb")
+            pickle.dump(ker_cache, output, pickle.HIGHEST_PROTOCOL)
+            output.close()
+        except Exception as e:
+            print("Pickle failed to save KER results.")
+            print(e)
 
     return events_nbr
+
+
+#Transition probability p at curve-crossing point R_x,k
+def transition_proba_at_one_curve_crossing_pt(R, E, v, b, deltaE_ic, deltaF):
+
+    #print("R "+str(R)+" E "+str(E)+" v "+str(v)+" b "+str(b)+" deltaE_ic "+str(deltaE_ic)+" deltaF "+str(deltaF))
+
+    #Radial relative collision of H_2^+ and H^-
+    v_r = v*np.sqrt(1+1/(R*E)-(b/R)**2)
+    #print("b "+str(b)+" v_r "+str(v_r))
+    #Transition probability p at curve-crossing point R_x,k
+    p = np.exp(-math.pi*deltaE_ic**2/(2*v_r*deltaF))
+    return p
+
+def proba_for_pop_of_given_exit_channel(R, E, v, b, deltaE_ic, deltaF):
+    p = transition_proba_at_one_curve_crossing_pt(R, E, v, b, deltaE_ic, deltaF)
+    #print("p "+str(p))
+    #P = 2*np.prod(p[:p.size-1])*(1-p[-1])
+    return 2*p*(1-p)
+    #return P
+
+#
+# Following "Mutual neutralization in slow H_2^+ - H^- collisions", C L Liu,
+# H G Wang and R K Janev
+#
+#def landau_zener(molecular_state, energies, E_A, franck_condon_matrix_el):
+
+    # #noramlization constant of the asymptotic radial wavefunction of active
+    # #electron in initial H^-
+    # A_i = 1.12
+    # #Electron binding energy of final state H_2 in H_2^+ + H_^- -> H_2 + H
+    # #E_A = molecular_state.get_electron_binding_energy()
+    #
+    # L = molecular_state.get_electron_angular_momentum()
+    # S = molecular_state.get_total_spin()
+    #
+    # #Factor resulting from coupling of initial and final state angular and spin
+    # #momenta
+    # D = math.sqrt((2*L+1)*(2*S+1))
+    # E_A = E_A/au_to_ev
+    # gamma = np.sqrt(2*E_A)
+    #
+    #
+    #
+    # R = au_to_ev/energies
+    #
+    # #R = 30.493
+    #
+    # # normalization constant of asymptotic radial wavefunction of active
+    # #electron in final H_2
+    # if (1.0/gamma-L) < 0:
+    #     #print("Warning (1.0/gamma-L) < 0 in landau_zener, A_c set to 0.")
+    #     A_c = 0
+    # else:
+    #     A_c = gamma*(2*gamma)**(1.0/gamma)/np.sqrt(
+    #     sp.special.gamma(1.0/gamma+L+1)*sp.special.gamma(1.0/gamma-L))
+    #
+    # #Calcul de H_ic
+    # H_12 = 0.5*A_i*A_c*D*R**(1.0/gamma-1)*np.exp(-gamma*R)*franck_condon_matrix_el
+
+
+    # if math.isnan(H_12):
+    #     print("H_12 "+str(H_12)+" au")
+    #     print("A_c "+str(A_c))
+    #     print("R "+str(R)+" a0")
+    #     print("E_A "+str(E_A*au_to_ev)+" eV")
+    #     print("gamma "+str(gamma))
+
+def landau_zener(H_12, R):
+    deltaE_ic = 2*H_12
+    #Difference of slopes of ionic and covalent potential energy curves
+    deltaF = R**-2
+
+    #reduced mass, m_D = 2
+    D_mass_SI = 2*m_p
+    D_mass = D_mass_SI/m_e
+    #D_mass = 2
+    mu = 2*D_mass/3
+
+    #Collision velocity
+    E = 0.005/(au_to_ev)
+    v = math.sqrt(2*E/mu)
+    #E = 0.5*mu*v**2
+
+    #b is the impact parameter
+    b_upper_bound = R*np.sqrt(1+1/(R*E))
+
+
+    #cross_sec = np.zeros(R.size)
+
+    #for n in range(0, R.size):
+
+    to_integrate = lambda b: proba_for_pop_of_given_exit_channel(R, E,
+    v, b, deltaE_ic, deltaF)*b
+    #print(sp.integrate.quad(to_integrate, 0, b_upper_bound[n-1])[0])
+    cross_sec = 2*math.pi*sp.integrate.quad(to_integrate, 0, b_upper_bound)[0]
+
+    #return proba_for_pop_of_given_exit_channel(R, E,
+    #v, 15, deltaE_ic, deltaF)
+
+    #Initial collision energy
+    #E_0 = 0
+
+
+
+
+
+    #return p*(1-p)
+    #print(H_12*au_to_ev)
+
+    #print("H_12 "+str(H_12*au_to_ev)+" eV")
+    #print(0.5*A_i*A_c*D)
+    #print(0.606*10**-3/au_to_ev/(R**(1/gamma-1))*math.exp(gamma*R))
+    #print("gamma "+str(gamma))
+
+    #print("H_12 "+str(H_12))
+    return cross_sec
+
+# E_A in the article
+def electron_binding_energy_of_final_state_matrix(numerov_res_i, numerov_res_f):
+
+    (r_bohr_i, V_i, eigen_values_i, eigen_vectors_i) = (numerov_res_i.r_bohr,
+    numerov_res_i.V, numerov_res_i.eigen_values, numerov_res_i.eigen_vectors)
+    (r_bohr_f, V_f, eigen_values_f, eigen_vectors_f) = (numerov_res_f.r_bohr,
+    numerov_res_f.V, numerov_res_f.eigen_values, numerov_res_f.eigen_vectors)
+
+    dr_i = (r_bohr_i[1]-r_bohr_i[0])*bohr_to_meter
+    dr_f = (r_bohr_f[1]-r_bohr_f[0])*bohr_to_meter
+
+
+    E_As = np.zeros((len(eigen_vectors_i), len(eigen_vectors_f)))
+
+    for i in range(0,len(eigen_vectors_i)):
+        for f in range(0,len(eigen_vectors_f)):
+
+            psi_i = eigen_vectors_i[i]
+            psi_f = eigen_vectors_f[f]
+            #Compute <Psi | R | Psi > = <R>
+            R_i = wave_fun_scalar_prod(psi_i*r_bohr_i, psi_i, dr_i)
+            R_f = wave_fun_scalar_prod(psi_f*r_bohr_f, psi_f, dr_f)
+            #print(R_f)
+            V_i_R = V_i(R_i)
+            V_f_R = V_f(R_f)
+            E_As[i,f] = V_i_R-V_f_R
+
+    return E_As
+
+def ker_to_file(energies, ker, out_path):
+    of = open(out_path, "w")
+    of.write("energy(eV) events_nbr\n")
+    for i in range(0, energies.size):
+        of.write(str(energies[i])+" "+str(ker[i])+"\n")
+    of.close()
 
 #
 # def pop_from_coef(energies, numerov_params_list,

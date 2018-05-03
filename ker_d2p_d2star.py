@@ -38,10 +38,19 @@ E_max = 1-.663091017*27.211
 # plt.show()
 
 ker_exp = np.loadtxt(EXP_KER_PATH)
-energies = ker_exp[:,0]
+energies_exp = ker_exp[:,0]
+energies = energies_exp
 events_nbr_exp = ker_exp[:,1]
 energy_shift = -0.754
 
+
+# proba = comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_GK1SG_MS,
+# only_ground_state_vib_level_distrib, energies, energy_shift)
+# plt.plot(energies, proba)
+# plt.show()
+#
+# ker_to_file(energies, proba, "data/numeric_ker_GK1SG_v0only_with_qr.txt")
+#
 
 # end_states_no_q_r = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*3, "GK1SG"),
 # (D2STAR_2_3SG_NUMEROV_PARAMS, 150*3/4, "2_3SG"),
@@ -56,8 +65,12 @@ energy_shift = -0.754
 # (D2STAR_3_3SU_NUMEROV_PARAMS, 10, "3_3SU"),
 # (D2STAR_4_3SU_NUMEROV_PARAMS, 125, "4_3SU")]
 
-# end_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*2.7, "GK1SG"),
-# (D2STAR_2_3SG_NUMEROV_PARAMS, 150*4/5, "2_3SG"),
+# Symétrie autorisée:
+# Sigma_g^+, Pi_u, Delta_g
+# Sigma_u^+, Pi_g, Delta_u
+#
+end_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*2.7, "GK1SG"),
+(D2STAR_2_3SG_NUMEROV_PARAMS, 150*4/5, "2_3SG")
 # (D2STAR_3_3SG_NUMEROV_PARAMS, 140*3/5, "3_3SG"),
 # (D2STAR_1_SU_B_NUMEROV_PARAMS, 125, "1_SU_B"),
 # (D2STAR_1_SU_BP_NUMEROV_PARAMS, 450, "1_SU_BP"),
@@ -80,7 +93,7 @@ energy_shift = -0.754
 # (D2STAR_3_3PI_U_NUMEROV_PARAMS,100, "3_3PI_U"),
 # (D2STAR_1_PI_GI_NUMEROV_PARAMS, 100, "1_PI_GI"),
 # (D2STAR_1_PI_GR_NUMEROV_PARAMS, 100, "1_PI_GR")
-# ]
+]
 
 #
 # end_states_q_r_quad = [(D2STAR_GK1SG_NUMEROV_PARAMS, 10**2*4*5/6, "GK1SG"),
@@ -135,13 +148,13 @@ c_up_bound = 1/math.sqrt(2*math.log(2))
 #bounds = ((0,b_bot_bound,0,0,0,0), (math.inf,b_up_bound,c_up_bound,math.inf,math.inf,math.inf))
 #)
 
-res = sp.optimize.curve_fit(ker_vec_fit, energies_fit,
-events_nbr_exp_fit, p0=(1, 1, 1),
-bounds = ((0,0,0), (math.inf,math.inf,math.inf))
-)
+#res = sp.optimize.curve_fit(ker_vec_fit, energies_fit,
+#events_nbr_exp_fit, p0=(1, 1, 1),
+#bounds = ((0,0,0), (math.inf,math.inf,math.inf))
+#)
 
-print(res)
-(alpha1, alpha2, alpha3) = res[0]
+#print(res)
+#(alpha1, alpha2, alpha3) = res[0]
 
 
 #numerov_params_list = [D2STAR_GK1SG_NUMEROV_PARAMS, D2STAR_1_SU_BP_NUMEROV_PARAMS,
@@ -161,16 +174,44 @@ print(res)
 
 
 
-plt.plot(energies, events_nbr_exp)
-plt.plot(energies, ker_vec_fit(energies,alpha1, alpha2, alpha3))#, alpha3, alpha4, alpha5))
+#plt.plot(energies, events_nbr_exp)
+#plt.plot(energies, ker_vec_fit(energies,alpha1, alpha2, alpha3))#, alpha3, alpha4, alpha5))
 #plt.plot(energies, alpha1*gaussian(a, b, c,energies))
-plt.show()
+#plt.show()
 
-#energy_shift = -0.754
+not_zero_idx = energies > 0.5
+energies =  energies[not_zero_idx]
+
+ker_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 0.001, "GK1SG L=0 S=0", 0, 0),
+(D2STAR_GK1SG_NUMEROV_PARAMS, 0.001, "GK1SG L=1 S=0", 1, 0),
+(D2STAR_GK1SG_NUMEROV_PARAMS, 0.01/2, "GK1SG L=2 S=0", 2, 0),
+(D2STAR_GK1SG_NUMEROV_PARAMS, 0.001, "GK1SG L=2 S=1", 2, 1)]
+
+def ker_f(params):
+    (numerov_params, scale_coef, label, L, S) = params
+    print(L)
+    print(S)
+    return comp_ker_vector(D2P_NUMEROV_PARAMS,
+    MolecularState(numerov_params, 0, L, S), D2_plus_vib_level_distrib, energies,energy_shift, use_cache = True)
+
+executor = concurrent.futures.ProcessPoolExecutor(4)
+futures = [executor.submit(ker_f, ker_state) for ker_state in ker_states]
+concurrent.futures.wait(futures)
+
+plt.plot(energies_exp, ker_exp)
+for i in range(0, len(futures)):
+    (numerov_params, scale_coef, label, L, S) = ker_states[i]
+    ker = futures[i].result()
+    plt.plot(energies, ker*scale_coef, label=label)
+plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
+
+plt.show()
+#print(ker_f)
+# energy_shift = -0.754
 # plt.plot(energies, events_nbr_exp)
 # for (numerov_params, scale_coef, label) in end_states:
 #     events_nbr = comp_ker_vector(D2P_NUMEROV_PARAMS,
-#     numerov_params, D2_plus_vib_level_distrib,
+#     MolecularState(numerov_params), D2_plus_vib_level_distrib,
 #     energies,energy_shift)*scale_coef
 #     plt.plot(energies, events_nbr, label=label)
 # plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
@@ -178,3 +219,57 @@ plt.show()
 # plt.show()
 
 #essayer largeur 1, 2, 3 eV entre 0.7 et 2.7 1/e^2 largeur à mi hauter +/- 1eV
+
+#ker_lz = comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_GK1SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies,energy_shift)
+not_zero_idx = energies > 0.5
+
+
+#ker_lz = ker_lz[not_zero_idx]
+energies =  energies[not_zero_idx]
+#R = au_to_ev/(energies)
+
+R = 30.493
+
+energy = 1/R*au_to_ev
+
+#lz = landau_zener(D2STAR_GK1SG_MS, energy, 1.646)
+
+#print(transition_proba_at_one_curve_crossing_pt(30.493, 0.005/(au_to_ev), 3.87*10**-4, 15, 2*6.06*10**-3/au_to_ev, R**2))
+
+
+#plt.plot(R, lz)
+#plt.show()
+
+#plt.plot(energies, lz)
+#plt.show()
+
+
+# R = np.arange(15,40)
+# energies = 1/R*au_to_ev
+#
+#
+# result = landau_zener(D2STAR_GK1SG_MS, energies, 1.6)
+#
+# plt.plot(R, result)
+# plt.show()
+
+# R = 30.493
+# energy = 1/R*au_to_ev
+# E_A = 1.646
+#
+# landau_zener(D2STAR_GK1SG_MS, energy, E_A)
+
+#def transition_proba_at_one_curve_crossing_pt(R, 0.005/(au_to_ev), 3.87*10**-4, 15, deltaE_ic, deltaF):
+
+
+#plt.plot(energies_exp, ker_exp)
+#plt.plot(energies, comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_GK1SG_MS,
+#D2_plus_vib_level_distrib, energies,energy_shift)*10**16)
+#
+#print(comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_GK1SG_MS,
+#D2_plus_vib_level_distrib, energies, energy_shift))
+#plt.show()
+# #print(R)
+# #print(lz)
+# #fit = interp1d(R, lz,kind="linear",fill_value="extrapolate")
+# #print(fit(30)*(0.529*10**-8)**2)

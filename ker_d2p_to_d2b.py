@@ -79,7 +79,7 @@ FCM = comp_franck_condon_matrix(numerov_res_i, numerov_res_f)
 energies = ker_exp[:,0]
 proba_exp = ker_exp[:,1]
 energies_theo = numerov_res_D2B.eigen_values #np.linspace(0.0, 10, 200)
-energies_theo = energies_theo[energies_theo > 0.2]
+energies_theo = energies_theo[energies_theo > 0.12]
 #energies_theo = energies_theo[energies_theo < 5]
 
 
@@ -106,15 +106,12 @@ for e in energies_theo:
     D2_plus_vib_level_distrib(numerov_res_D2P.eigen_values), e,
     FCM)
     proba_theo.append(p_e)
-proba_theo = alpha*np.array(proba_theo)
+proba_theo_fit = alpha*np.array(proba_theo)
 #print(proba_theo)
 #
 plt.plot(energies, proba_exp)
-plt.plot(energies_theo, proba_theo)
+plt.plot(energies_theo, proba_theo_fit)
 plt.show()
-
-#plt.plot(energies_theo, proba_theo)
-#plt.show()
 
 
 #q(r)
