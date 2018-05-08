@@ -77,6 +77,7 @@ electron_charge = 1.60217662*10**-19 #coulomb
 bohr_to_meter = 5.291772*10**-11
 ionisation_potential_d2 = 15.466 #eV
 au_to_ev = 27.211396
+electron_binding_energy_in_H_minus = 0.754 #eV
 
 E_max_bound_states_D2p = 12.9-27.211
 E_ground_state_D2p = 11-27.211
@@ -814,77 +815,79 @@ eigen_vectors_free, eigen_values_free, r_bohr_free, V_free, plot_ratio_bound=1, 
 
 #END He2 Raghed ###################################################################
 
-
-#pre: eigen values sorted by increasing energies
-#     eigen_values_bound size is <= 27
-def D2_plus_vib_level_distrib(eigen_values_bound):
-
-    #Provided by X. Urbain
-    proba_of_levels = np.array([0.080937,
-    0.0996592,
-    0.117558,
-    0.117339,
-    0.109159,
-    0.0917593,
-    0.0799601,
-    0.0670289,
-    0.0498184,
-    0.0420871,
-    0.0310552,
-    0.0230351,
-    0.0206377,
-    0.0139325,
-    0.0117896,
-    0.00925865,
-    0.00724063,
-    0.00603588,
-    0.00578535,
-    0.00419046,
-    0.00285177,
-    0.00245263,
-    0.00167712,
-    0.00132409,
-    0.00161653,
-    0.000861533,
-    0.000948806])
-
-    #From von Busch et al.
-    # proba_of_levels = np.array([0.0448,
-    # 0.1038,
-    # 0.1407,
-    # 0.1476,
-    # 0.1337,
-    # 0.1106,
-    # 0.085,
-    # 0.063,
-    # 0.042,
-    # 0.034,
-    # 0.024,
-    # 0.017,
-    # 0.0122,
-    # 0.0088,
-    # 0.0064,
-    # 0.0048,
-    # 0.0036,
-    # 0.0025,
-    # 0.00185,
-    # 0.0038,
-    # 0.00102,
-    # 0.00075,
-    # 0.00054,
-    # 0.00037,
-    # 0.00023,
-    # 0.00011,
-    # 0.00002])
-
+def build_proba_of_E_fun(proba_of_levels, eigen_values_bound):
     def proba_of_E(E):
         i = np.abs(eigen_values_bound-E).argmin()
         if i >= proba_of_levels.size:
             return 0
         else:
             return proba_of_levels[i]
-    #proba_of_E = lambda E: proba_of_levels[np.abs(eigen_values_bound-E).argmin()]
     return proba_of_E
+
+
+#Provided by X. Urbain
+D2P_vib_levels_distr = np.array([0.080937,
+0.0996592,
+0.117558,
+0.117339,
+0.109159,
+0.0917593,
+0.0799601,
+0.0670289,
+0.0498184,
+0.0420871,
+0.0310552,
+0.0230351,
+0.0206377,
+0.0139325,
+0.0117896,
+0.00925865,
+0.00724063,
+0.00603588,
+0.00578535,
+0.00419046,
+0.00285177,
+0.00245263,
+0.00167712,
+0.00132409,
+0.00161653,
+0.000861533,
+0.000948806])
+
+#From von Busch et al.
+# proba_of_levels = np.array([0.0448,
+# 0.1038,
+# 0.1407,
+# 0.1476,
+# 0.1337,
+# 0.1106,
+# 0.085,
+# 0.063,
+# 0.042,
+# 0.034,
+# 0.024,
+# 0.017,
+# 0.0122,
+# 0.0088,
+# 0.0064,
+# 0.0048,
+# 0.0036,
+# 0.0025,
+# 0.00185,
+# 0.0038,
+# 0.00102,
+# 0.00075,
+# 0.00054,
+# 0.00037,
+# 0.00023,
+# 0.00011,
+# 0.00002])
+
+
+#pre: eigen values sorted by increasing energies
+#     eigen_values_bound size is <= 27
+def D2_plus_vib_level_distrib(eigen_values_bound):
+    return build_proba_of_E_fun(D2P_vib_levels_distr, eigen_values_bound)
 
 def only_ground_state_vib_level_distrib(eigen_values_bound):
     def proba_of_E(E):
@@ -986,6 +989,18 @@ def comp_franck_condon_matrix(numerov_res_i, numerov_res_f, q_r = lambda r: 1):
 
     return franck_condon_matrix
 
+def final_pop_from_franck_condon(init_pop_dist, franck_condon_matrix):
+
+    nbr_of_i_states = franck_condon_matrix.shape[0]
+    nbr_of_f_states = franck_condon_matrix.shape[1]
+    final_pop = np.zeros(nbr_of_f_states)
+
+    for i in range(0, nbr_of_f_states):
+        for j in range(0, init_pop_dist.size):
+            final_pop[i] = final_pop[i] + init_pop_dist[j]*franck_condon_matrix[j,i]
+
+    return final_pop
+
 def energy_diff_matrix(numerov_res_i, numerov_res_f, energy_shift=0):
 
     (r_bohr_i, V_i, eigen_values_i, eigen_vectors_i) = (numerov_res_i.r_bohr,
@@ -1080,7 +1095,7 @@ def H(molecular_state, E_A, R):
     A_c = np.zeros(gamma.size)
     for i in range(0, gamma.size):
         if (1.0/gamma[i]-L) < 0:
-            print("Warning (1.0/gamma-L) < 0 in landau_zener, A_c set to 0.")
+            #print("Warning (1.0/gamma-L) < 0 in landau_zener, A_c set to 0.")
             A_c[i] = 0
         else:
             A_c[i] = gamma[i]*(2*gamma[i])**(1.0/gamma[i])/np.sqrt(
@@ -1091,10 +1106,8 @@ def H(molecular_state, E_A, R):
     return H_12
 
 
-# Use  H = int dr Psi_v_D2+  H(r)  Psi_v_D2
-# where H =
 def comp_landau_zener_matrix(numerov_res_i, molecular_state_f, numerov_res_f,
-Ei_minus_Ef_matrix, E_As):
+Ei_minus_Ef_matrix, E_As, formule_id=0):
 
     (r_bohr_i, V_i, eigen_values_i, eigen_vectors_i) = (numerov_res_i.r_bohr,
     numerov_res_i.V, numerov_res_i.eigen_values, numerov_res_i.eigen_vectors)
@@ -1122,37 +1135,56 @@ Ei_minus_Ef_matrix, E_As):
             kind=0, fill_value=0, bounds_error = False)
             ev_f_data = ev_f(r_bohr)
 
+            #Only FCF
+            if formule_id == 0:
+                FCF = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)**2
+                landau_zener_matrix[i,j] = FCF
+
             #Formula 1
-            # R_au = 30.493
-            # H_ic = 6.06*10**-3
-            # FCF = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)**2
-            # landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)*FCF
+            if formule_id == 1:
+                R_au = 30.493
+                H_ic = 6.06*10**-3
+                FCF = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)**2
+                landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)*FCF
 
-            # #Formula 2
-            # R_au = 30.493
-            # H_r = H(molecular_state_f, np.array([E_As[i,j]]), R_au)
-            # S = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)
-            # H_ic = H_r*S
-            #
-            # #Formula 3
-            # R_au = au_to_ev/Ei_minus_Ef_matrix[i,j]
-            # H_r = H(molecular_state_f, np.array([E_As[i,j]]), R_au)
-            # S = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)
-            # H_ic = H_r*S
-            #
-            # #Formula 4
-            # R_au = 30.493
-            # E_A = V_i(r_bohr)-V_f(r_bohr)
-            # H_r = H(molecular_state_f, E_A, R_au)
-            # H_ic = wave_fun_scalar_prod(ev_i_data*H_r, ev_f_data, dr)
-            #
-            # #Formula 5
-            R_au = au_to_ev/Ei_minus_Ef_matrix[i,j]
-            E_A = V_i(r_bohr)-V_f(r_bohr)
-            H_r = H(molecular_state_f, E_A, R_au)
-            H_ic = wave_fun_scalar_prod(ev_i_data*H_r, ev_f_data, dr)
+            #Formula 2
+            if formule_id == 2:
+                R_au = 30.493
+                H_r = H(molecular_state_f, np.array([E_As[i,j]]), R_au)
+                S = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)
+                H_ic = H_r*S
+                landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)
 
-            landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)
+            #Formula 3
+            if formule_id == 3:
+                R_au = au_to_ev/Ei_minus_Ef_matrix[i,j]
+                H_r = H(molecular_state_f, np.array([E_As[i,j]]), R_au)
+                S = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)
+                H_ic = H_r*S
+                landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)
+
+            #Formula 4
+            if formule_id == 4:
+                R_au = 30.493
+                E_A = V_i(r_bohr)-V_f(r_bohr)
+                H_r = H(molecular_state_f, E_A, R_au)
+                H_ic = wave_fun_scalar_prod(ev_i_data*H_r, ev_f_data, dr)
+                landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)
+
+            #Formula 5
+            if formule_id == 5:
+                R_au = au_to_ev/Ei_minus_Ef_matrix[i,j]
+                E_A = V_i(r_bohr)-V_f(r_bohr)
+                H_r = H(molecular_state_f, E_A, R_au)
+                H_ic = wave_fun_scalar_prod(ev_i_data*H_r, ev_f_data, dr)
+                landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)
+
+            #Formula 6
+            if formule_id == 6:
+                R_au = au_to_ev/Ei_minus_Ef_matrix[i,j]
+                H_ic = H(molecular_state_f, np.array([E_As[i,j]]), R_au)
+                FCF = wave_fun_scalar_prod(ev_i_data, ev_f_data, dr)**2
+                landau_zener_matrix[i,j] = landau_zener(H_ic, R_au)*FCF
 
     return landau_zener_matrix
 
@@ -1160,7 +1192,7 @@ Ei_minus_Ef_matrix, E_As):
 
 
 def comp_ker_vector(numerov_params_i, molecular_state_f,
-vib_level_distrib_i, energies, energy_shift=0, use_cache = True):
+vib_level_distrib_i, energies, energy_shift=0, use_cache = True, lz_formule_id=0):
 
     numerov_params_f = molecular_state_f.get_numerov_params()
 
@@ -1199,7 +1231,7 @@ vib_level_distrib_i, energies, energy_shift=0, use_cache = True):
 
 
 
-    vib_level_distrib_i = vib_level_distrib_i(numerov_res_i.eigen_values)
+    #vib_level_distrib_i = vib_level_distrib_i(numerov_res_i.eigen_values)
     #franck_condon_matrix = comp_franck_condon_matrix(numerov_res_i,
     #numerov_res_f, q_r_bound_to_bound)
     Ei_minus_Ef_matrix = energy_diff_matrix(numerov_res_i, numerov_res_f,
@@ -1207,7 +1239,7 @@ vib_level_distrib_i, energies, energy_shift=0, use_cache = True):
     E_As = electron_binding_energy_of_final_state_matrix(numerov_res_i,
     numerov_res_f)
     landau_zener_matrix = comp_landau_zener_matrix(numerov_res_i, molecular_state_f,
-    numerov_res_f, Ei_minus_Ef_matrix, E_As)
+    numerov_res_f, Ei_minus_Ef_matrix, E_As, lz_formule_id)
 
 
     #executor = concurrent.futures.ProcessPoolExecutor(4)
@@ -1261,7 +1293,10 @@ def transition_proba_at_one_curve_crossing_pt(R, E, v, b, deltaE_ic, deltaF):
 
 def proba_for_pop_of_given_exit_channel(R, E, v, b, deltaE_ic, deltaF):
     p = transition_proba_at_one_curve_crossing_pt(R, E, v, b, deltaE_ic, deltaF)
-    #print("p "+str(p))
+
+    #if p*(1-p) > 0.01:
+    #    print("R "+str(R)+" E "+str(E)+" v "+str(v)+" b "+str(b)+" deltaE_ic "+str(deltaE_ic)+" deltaF "+str(deltaF))
+    #    print("p "+str(p))
     #P = 2*np.prod(p[:p.size-1])*(1-p[-1])
     return 2*p*(1-p)
     #return P
@@ -1420,3 +1455,7 @@ def ker_to_file(energies, ker, out_path):
 #         pop.append(I_i/I)
 #     return pop
 #
+
+#In D2, energy when electron is on orbital n - energy when e- in ground state
+def energy_diff_with_ground_state(n):
+    return 0.5*(1-1/n**2)*27.21
