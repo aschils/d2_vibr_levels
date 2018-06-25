@@ -40,6 +40,7 @@ D2P_POTENTIAL_FILE_DISSOC = "pot_d2+.txt"
 D2P_POTENTIAL_FILE = "pot_d2+_shifted.txt"
 D2DISSOC_POTENTIAL_FILE = "pot_d2_b.txt"
 D2X_1SG_POTENTIAL_FILE = "d2_x_1sg.txt" #Ground state
+D2X_1SG_FREE_PART_POTENTIAL_FILE = "d2_x_1sg_free.txt"
 D2STAR_GK1SG_POTENTIAL_FILE = "gk1sg.dat"
 D2STAR_2_3SG_POTENTIAL_FILE = "2_3Sigma_g_truncat"
 D2STAR_3_3SG_POTENTIAL_FILE = "3_3Sigma_g"
@@ -73,6 +74,7 @@ m_e = 9.10938356*10**-31 #electron mass [kg]
 m_p = 1.672*10**-27 #Proton mass [kg]
 reduced_mass_d2 = m_p #approximation of D_2 reduced mass [kg]
 reduced_mass_he2 = 2*m_p
+reduced_mass_h2 = m_p/2
 electron_charge = 1.60217662*10**-19 #coulomb
 bohr_to_meter = 5.291772*10**-11
 ionisation_potential_d2 = 15.466 #eV
@@ -123,8 +125,10 @@ class NumerovResult:
         self.eigen_values = eigen_values
         self.eigen_vectors = eigen_vectors
 
-    def plot(self, plot_ratio=1):
-        plot_wave_fun(self.eigen_vectors, self.eigen_values, self.r_bohr, self.V, plot_ratio)
+    def plot(self, r_bohr_max=float("inf"), plot_ratio=1, save=False, out_path=None):
+        r_bohr = self.r_bohr[self.r_bohr <= r_bohr_max]
+        plot_wave_fun(self.eigen_vectors, self.eigen_values, r_bohr, self.V,
+        plot_ratio, save, out_path)
 
     def write_eigen_vector(self, path):
         of = open(path, "w")
@@ -162,14 +166,20 @@ refine = 2
 #r_end_for_unbound_potential=10, refine=1, pot_in_au, auto_E_max
 D2P_NUMEROV_PARAMS = NumerovParams(D2P_POTENTIAL_FILE, True, E_max_bound_states_D2p,
 reduced_mass_d2, 10, refine, False, True)
+H2P_NUMEROV_PARAMS = NumerovParams(D2P_POTENTIAL_FILE, True, E_max_bound_states_D2p,
+reduced_mass_h2, 10, refine, False, True)
 D2P_NUMEROV_PARAMS_DISSOC = NumerovParams(D2P_POTENTIAL_FILE_DISSOC, True, E_max_bound_states_D2p,
 reduced_mass_d2, 10, refine, False, True)
 D2B_NUMEROV_PARAMS = NumerovParams(D2DISSOC_POTENTIAL_FILE, False, E_max_bound_states_D2b,
 reduced_mass_d2, 30, refine, False, False)
 D2X_1SG_NUMEROV_PARAMS = NumerovParams(D2X_1SG_POTENTIAL_FILE, True,
 0, reduced_mass_d2, 0, refine, True, True)
+D2X_1SG_FREE_PART_NUMEROV_PARAMS = NumerovParams(D2X_1SG_FREE_PART_POTENTIAL_FILE, False,
+0, reduced_mass_d2, 10, refine, True, False)
 D2STAR_GK1SG_NUMEROV_PARAMS = NumerovParams(D2STAR_GK1SG_POTENTIAL_FILE, True,
 E_max_bound_states_D2STAR_GK1SG, reduced_mass_d2, 10, refine, True, True)
+H2STAR_GK1SG_NUMEROV_PARAMS = NumerovParams(D2STAR_GK1SG_POTENTIAL_FILE, True,
+E_max_bound_states_D2STAR_GK1SG, reduced_mass_h2, 10, refine, True, True)
 D2STAR_2_3SG_NUMEROV_PARAMS = NumerovParams(D2STAR_2_3SG_POTENTIAL_FILE, True,
 E_max_bound_states_D2STAR_2_3SG, reduced_mass_d2, 10, refine, True, True)
 D2STAR_3_3SG_NUMEROV_PARAMS = NumerovParams(D2STAR_3_3SG_POTENTIAL_FILE, True,
@@ -178,6 +188,8 @@ D2STAR_1_SU_B_NUMEROV_PARAMS = NumerovParams(D2STAR_1_SU_B_POTENTIAL_FILE, True,
 E_max_bound_states_D2STAR_1_SU_B, reduced_mass_d2, 10, refine, True, True)
 D2STAR_1_SU_BP_NUMEROV_PARAMS = NumerovParams(D2STAR_1_SU_BP_POTENTIAL_FILE, True,
 0, reduced_mass_d2, 10, refine, True, True)
+H2STAR_1_SU_BP_NUMEROV_PARAMS = NumerovParams(D2STAR_1_SU_BP_POTENTIAL_FILE, True,
+0, reduced_mass_h2, 10, refine, True, True)
 D2STAR_1_SU_BPP_NUMEROV_PARAMS = NumerovParams(D2STAR_1_SU_BPP_POTENTIAL_FILE, True,
 0, reduced_mass_d2, 10, refine, True, True)
 D2STAR_2_1SG_NUMEROV_PARAMS = NumerovParams(D2STAR_2_1SG_POTENTIAL_FILE, True,
@@ -264,6 +276,9 @@ def wave_fun_scalar_prod(psi1, psi2, dr):
 #     return psi_normalized
 
 def normalize_continuum_wave_fun(r, psi, energy):
+
+    #defense
+    energy = np.abs(energy)
 
     #Find amplitude of sin in psi "at infinity"
     r = r/bohr_to_meter
@@ -465,8 +480,10 @@ def numerov(NumerovParams, use_cache = True):
             i_max = idx_of_lower_E_max(V_discr, E_max, percent_below_E_max)
             E_max = V_discr[i_max]
     else:
-        E_min = V(r_inf)
-        r_min_of_V = r_inf
+        #E_min = V(r_inf)
+        #r_min_of_V = r_inf
+        r_min_of_V = r[-1]
+        E_min = V(r_min_of_V)
 
     print("Will search vibrational levels between E_min "+str(E_min/electron_charge)+ \
     " eV and E_max "+str(E_max/electron_charge)+" eV")
@@ -488,12 +505,17 @@ def numerov(NumerovParams, use_cache = True):
     dr = wavelength/(2.0*math.pi*refine)
     print("Step dr is "+str(dr/bohr_to_meter)+" bohr")
 
+    box_left_boundary = 0
+
     n = int(round((V_E_intersect_right-V_E_intersect_left)/dr+5))
+    #n = int(round((V_E_intersect_right-box_left_boundary)/dr+1))
     #print("n "+str(n)+" V_E_intersect_right "+str(V_E_intersect_right/bohr_to_meter)+" V_E_intersect_left "+str(V_E_intersect_left/bohr_to_meter)+" dr "+str(dr/bohr_to_meter))
 
     print("Number of points in the grid: "+str(n))
 
     i = np.arange(1,n+1)
+    #i = np.arange(0,n)
+    #r = box_left_boundary+dr*i
     r = (V_E_intersect_left-2*dr)+dr*i
 
     ones = np.ones(n)
@@ -562,8 +584,9 @@ def numerov(NumerovParams, use_cache = True):
         if is_bound_potential:
             eigen_vectors.append(ev/wave_fun_norm(ev, dr))
         else: #r, psi, energy
-            eigen_vectors.append(normalize_continuum_wave_fun(r, ev, eigen_values[idx]-E_min))
-            #eigen_vectors.append(normalize_continuum_wave_fun(idx, ev, eigen_values, V_E_intersect_right))
+            if eigen_values[idx] >= -1*au_to_ev:
+                eigen_vectors.append(normalize_continuum_wave_fun(r, ev, eigen_values[idx]-E_min))
+                #eigen_vectors.append(normalize_continuum_wave_fun(idx, ev, eigen_values, V_E_intersect_right))
         idx = idx+1
 
     eigen_vectors = np.asarray(eigen_vectors)
@@ -759,19 +782,30 @@ def under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V, plot_ratio=1):
             #    delta_E = V(r_bohr[0])*electron_charge/10
             #plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
             delta_E = 1
-            plt.plot(r_bohr, psi/np.linalg.norm(psi)*delta_E+eigen_values[i])
+            plt.plot(r_bohr, psi[0:r_bohr.size]/np.linalg.norm(psi)*delta_E+eigen_values[i])
 
-def plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio=1):
+def plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio=1,
+save=False, out_path=None):
+    plt.xlabel("Bohr")
+    plt.ylabel("eV")
     under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio=1)
+    if save:
+        plt.savefig(out_path)
     plt.show()
 
 def plot_bound_and_free(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound,
 eigen_vectors_free, eigen_values_free, r_bohr_free, V_free, plot_ratio_bound=1, plot_ratio_free=1,
-    V_free_shift=0):
+    V_free_shift=0, r_bohr_max=float("inf"), save=False, out_path=None):
+    plt.xlabel("Bohr")
+    plt.ylabel("eV")
+    r_bohr_bound = r_bohr_bound[r_bohr_bound <= r_bohr_max]
+    r_bohr_free = r_bohr_free[r_bohr_free <= r_bohr_max]
     V_bound_ev = lambda r: V_bound(r)
     under_plot_wave_fun(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound_ev, plot_ratio_bound)
     V_free_shifted = lambda r: V_free(r)+ V_free_shift
     under_plot_wave_fun(eigen_vectors_free, eigen_values_free, r_bohr_free, V_free_shifted, plot_ratio_free)
+    if save:
+        plt.savefig(out_path)
     plt.show()
 
 #He2 Raghed ###################################################################
@@ -883,11 +917,34 @@ D2P_vib_levels_distr = np.array([0.080937,
 # 0.00011,
 # 0.00002])
 
+H2P_vib_levels_distr = np.array([0.101072,
+0.149683,
+0.136775,
+0.125093,
+0.0943612,
+0.0778076,
+0.0695653,
+0.055193,
+0.0425999,
+0.0349292,
+0.0308706,
+0.0223014,
+0.0204149,
+0.0137707,
+0.00944833,
+0.00648526,
+0.0027797,
+0.00335822,
+0.00349202
+])
 
 #pre: eigen values sorted by increasing energies
 #     eigen_values_bound size is <= 27
 def D2_plus_vib_level_distrib(eigen_values_bound):
     return build_proba_of_E_fun(D2P_vib_levels_distr, eigen_values_bound)
+
+def H2_plus_vib_level_distrib(eigen_values_bound):
+    return build_proba_of_E_fun(H2P_vib_levels_distr, eigen_values_bound)
 
 def only_ground_state_vib_level_distrib(eigen_values_bound):
     def proba_of_E(E):
@@ -980,12 +1037,16 @@ def comp_franck_condon_matrix(numerov_res_i, numerov_res_f, q_r = lambda r: 1):
             ev_f_data, dr)**2
 
 
-    # print("*********")
-    # print(np.sum(franck_condon_matrix, axis=0))
-    # fig, axis = plt.subplots()
-    # heatmap = axis.pcolor(franck_condon_matrix)
-    # plt.colorbar(heatmap)
-    # plt.show()
+    print("*********")
+    print(np.sum(franck_condon_matrix, axis=0))
+    fig, axis = plt.subplots()
+    heatmap = axis.pcolor(franck_condon_matrix)
+    plt.colorbar(heatmap)
+    plt.xlabel("D2(GK) vib level indices")
+    plt.ylabel("D2+ vib level indices")
+    plt.savefig('plots/fcm.pdf', bbox_inches='tight')
+    plt.show()
+
 
     return franck_condon_matrix
 
@@ -1027,13 +1088,14 @@ landau_zener_matrix, Ei_minus_Ef):
     numerov_res_f.V, numerov_res_f.eigen_values, numerov_res_f.eigen_vectors)
 
     ker_of_E = 0
-
+    proba_v_f = bound_vib_level_distrib(eigen_values_i)
     #states_comb_list = []
     #val_list = []
 
     for i in range(0,len(eigen_vectors_i)):
         for j in range(0,len(eigen_vectors_f)):
-            proba_v = bound_vib_level_distrib(eigen_values_i[i])
+            proba_v = proba_v_f(eigen_values_i[i])
+
             #Sigma of Gaussian such as width at half-height is 0.05eV
             sigma = 0.05/math.sqrt(2*math.log(2))
 

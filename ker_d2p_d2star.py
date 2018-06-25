@@ -2,14 +2,12 @@ from numerov_and_ker_api import *
 
 ########################## BOUND state D_2^* potential ########################
 
-E_max = 1-.663091017*27.211
+#E_max = 1-.663091017*27.211
 
 #eigen_values_bound = eigen_values_bound-27.211
 
-#(r_bohr_bound_exc, V_bound_exc, eigen_values_bound_exc, eigen_vectors_bound_exc) = numerov(
 #numerov_res_D2STAR_GK1SG = numerov(
 #D2STAR_GK1SG_POTENTIAL_FILE, True, E_max, reduced_mass_d2, refine=5, pot_in_au=True)
-#eigen_values_bound_exc = eigen_values_bound_exc-.663091017*27.211
 
 #plot_wave_fun(eigen_vectors_bound_exc, eigen_values_bound_exc, r_bohr_bound_exc, V_bound_exc)
 
@@ -131,17 +129,17 @@ def ker_vec_fit(energies,alpha1, alpha2, alpha3):#, alpha3, alpha4, alpha5):
     # comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_3_3SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies)*alpha9
     #)
 #
-energies_fit_idx = np.logical_and(energies > 1.2, energies < 2)
+#energies_fit_idx = np.logical_and(energies > 1.2, energies < 2)
 # energies_fit_idx = np.logical_and(energies > 0.5, energies < 2)
 #
-energies_fit = energies[energies_fit_idx]
-events_nbr_exp_fit = events_nbr_exp[energies_fit_idx]
+#energies_fit = energies[energies_fit_idx]
+#events_nbr_exp_fit = events_nbr_exp[energies_fit_idx]
 
 #Bound for width at mid height of gaussian 1eV
 
-b_bot_bound = 1.15
-b_up_bound = 1.5
-c_up_bound = 1/math.sqrt(2*math.log(2))
+#b_bot_bound = 1.15
+#b_up_bound = 1.5
+#c_up_bound = 1/math.sqrt(2*math.log(2))
 
 #res = sp.optimize.curve_fit(ker_vec_fit, energies_fit,
 #events_nbr_exp_fit, p0=(1, 1.3, 0.5, 1, 1, 1),
@@ -179,77 +177,75 @@ c_up_bound = 1/math.sqrt(2*math.log(2))
 #plt.plot(energies, alpha1*gaussian(a, b, c,energies))
 #plt.show()
 
-not_zero_idx = energies > 0.5
-energies =  energies[not_zero_idx]
+#not_zero_idx = energies > 0.5
+#energies =  energies[not_zero_idx]
 
-ker_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 0.03/5, "GK1SG", 2, 0),
-(D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 1, 0),
-(D2STAR_2_3SU_NUMEROV_PARAMS, 0.001, "2_3SU", 1, 1),
-(D2STAR_1PI_U_C_NUMEROV_PARAMS, 0.001, "1PI_U_C", 1, 0),
-(D2STAR_3_3SG_NUMEROV_PARAMS, 0.001, "3_3SG", 0, 1),
-(D2STAR_1_SU_B_NUMEROV_PARAMS, 0.001, "1_SU_B", 1, 0),
-(D2STAR_1_SU_BPP_NUMEROV_PARAMS, 0.001, "1_SU_BPP", 1, 0),
-(D2STAR_2_1SG_NUMEROV_PARAMS, 0.001, "2_1SG", 0, 0),
-(D2STAR_3_1SG_NUMEROV_PARAMS, 0.001, "3_1SG", 0, 0),
-(D2STAR_4_1SG_NUMEROV_PARAMS, 0.001, "4_1SG", 0, 0), # pas sur pour L S
-(D2STAR_3_3SU_NUMEROV_PARAMS, 0.001, "3_3SU", 1, 1),
-(D2STAR_4_3SU_NUMEROV_PARAMS, 0.001, "4_3SU", 3, 1),
-(D2STAR_1PI_U_D_NUMEROV_PARAMS,0.001, "1PI_U_D", 1, 0),
-(D2STAR_1PI_U_C_NUMEROV_PARAMS,0.001, "1PI_U_C", 1, 0),
-(D2STAR_1_3PI_G_NUMEROV_PARAMS,0.001, "1_3PI_G", 2, 0),
-(D2STAR_1_3PI_U_NUMEROV_PARAMS,0.001, "1_3PI_U", 1, 0),
-(D2STAR_2_3PI_G_NUMEROV_PARAMS,0.001, "2_3PI_G", 2, 1),
-(D2STAR_2_3PI_U_NUMEROV_PARAMS,0.001, "2_3PI_U", 1, 1),
-(D2STAR_3_3PI_G_NUMEROV_PARAMS,0.001, "3_3PI_G", 2, 1),
-(D2STAR_3_3PI_U_NUMEROV_PARAMS,0.001, "3_3PI_U", 1, 1),
-(D2STAR_1_PI_GI_NUMEROV_PARAMS, 0.001, "1_PI_GI", 0, 0),# pas sur pour L S
-(D2STAR_1_PI_GR_NUMEROV_PARAMS, 0.001, "1_PI_GR", 0, 0)# pas sur pour L S
-]
+ker_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 0.03/5, "GK1SG", 2, 0)]
+#(D2STAR_1_SU_BP_NUMEROV_PARAMS, 0.001, "1_SU_BP", 1, 0),
+#(D2STAR_2_3SU_NUMEROV_PARAMS, 0.001, "2_3SU", 1, 1),
+#(D2STAR_1PI_U_C_NUMEROV_PARAMS, 0.001, "1PI_U_C", 1, 0),
+#(D2STAR_3_3SG_NUMEROV_PARAMS, 0.001, "3_3SG", 0, 1),
+#(D2STAR_1_SU_B_NUMEROV_PARAMS, 0.001, "1_SU_B", 1, 0),
+#(D2STAR_1_SU_BPP_NUMEROV_PARAMS, 0.001, "1_SU_BPP", 1, 0),
+#(D2STAR_2_1SG_NUMEROV_PARAMS, 0.001, "2_1SG", 0, 0),
+#(D2STAR_3_1SG_NUMEROV_PARAMS, 0.001, "3_1SG", 0, 0),
+#(D2STAR_4_1SG_NUMEROV_PARAMS, 0.001, "4_1SG", 0, 0), # pas sur pour L S
+#(D2STAR_3_3SU_NUMEROV_PARAMS, 0.001, "3_3SU", 1, 1),
+#(D2STAR_4_3SU_NUMEROV_PARAMS, 0.001, "4_3SU", 3, 1),
+#(D2STAR_1PI_U_D_NUMEROV_PARAMS,0.001, "1PI_U_D", 1, 0),
+#(D2STAR_1PI_U_C_NUMEROV_PARAMS,0.001, "1PI_U_C", 1, 0),
+#(D2STAR_1_3PI_G_NUMEROV_PARAMS,0.001, "1_3PI_G", 2, 0),
+#(D2STAR_1_3PI_U_NUMEROV_PARAMS,0.001, "1_3PI_U", 1, 0),
+#(D2STAR_2_3PI_G_NUMEROV_PARAMS,0.001, "2_3PI_G", 2, 1),
+#(D2STAR_2_3PI_U_NUMEROV_PARAMS,0.001, "2_3PI_U", 1, 1),
+#(D2STAR_3_3PI_G_NUMEROV_PARAMS,0.001, "3_3PI_G", 2, 1),
+#(D2STAR_3_3PI_U_NUMEROV_PARAMS,0.001, "3_3PI_U", 1, 1),
+#(D2STAR_1_PI_GI_NUMEROV_PARAMS, 0.001, "1_PI_GI", 0, 0),# pas sur pour L S
+#(D2STAR_1_PI_GR_NUMEROV_PARAMS, 0.001, "1_PI_GR", 0, 0)]# pas sur pour L S
 
-def ker_f(params):
-    (numerov_params, scale_coef, label, L, S) = params
-    print(L)
-    print(S)
-    return comp_ker_vector(D2P_NUMEROV_PARAMS,
-    MolecularState(numerov_params, 0, L, S), D2_plus_vib_level_distrib, energies,energy_shift, use_cache = True)
+# def ker_f(params):
+#     (numerov_params, scale_coef, label, L, S) = params
+#     return comp_ker_vector(D2P_NUMEROV_PARAMS,
+#     MolecularState(numerov_params, 0, L, S), D2_plus_vib_level_distrib, energies,energy_shift, use_cache = True)
+#
+# executor = concurrent.futures.ProcessPoolExecutor(1)
+# futures = [executor.submit(ker_f, ker_state) for ker_state in ker_states]
+# concurrent.futures.wait(futures)
+#
+# plt.plot(energies_exp, ker_exp)
+# for i in range(0, len(futures)):
+#     (numerov_params, scale_coef, label, L, S) = ker_states[i]
+#     ker = futures[i].result()
+#     plt.plot(energies, ker*scale_coef, label=label+" L "+str(L)+" S "+str(S))
+# plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
+# plt.show()
 
-executor = concurrent.futures.ProcessPoolExecutor(8)
-futures = [executor.submit(ker_f, ker_state) for ker_state in ker_states]
-concurrent.futures.wait(futures)
 
-plt.plot(energies_exp, ker_exp)
-for i in range(0, len(futures)):
-    (numerov_params, scale_coef, label, L, S) = ker_states[i]
-    ker = futures[i].result()
-    plt.plot(energies, ker*scale_coef, label=label+" L "+str(L)+" S "+str(S))
+#print(ker_f)
+energy_shift = -0.754
+#plt.plot(energies, events_nbr_exp)
+for (numerov_params, scale_coef, label, l, v) in ker_states:
+    events_nbr = comp_ker_vector(D2P_NUMEROV_PARAMS,
+    MolecularState(numerov_params), D2_plus_vib_level_distrib,
+    energies,energy_shift)*scale_coef
+    plt.plot(energies, events_nbr, label=label)
 plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
 
 plt.show()
-#print(ker_f)
-# energy_shift = -0.754
-# plt.plot(energies, events_nbr_exp)
-# for (numerov_params, scale_coef, label) in end_states:
-#     events_nbr = comp_ker_vector(D2P_NUMEROV_PARAMS,
-#     MolecularState(numerov_params), D2_plus_vib_level_distrib,
-#     energies,energy_shift)*scale_coef
-#     plt.plot(energies, events_nbr, label=label)
-# plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
-#
-# plt.show()
 
 #essayer largeur 1, 2, 3 eV entre 0.7 et 2.7 1/e^2 largeur à mi hauter +/- 1eV
 
 #ker_lz = comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_GK1SG_NUMEROV_PARAMS, D2_plus_vib_level_distrib, energies,energy_shift)
-not_zero_idx = energies > 0.5
+#not_zero_idx = energies > 0.5
 
 
 #ker_lz = ker_lz[not_zero_idx]
-energies =  energies[not_zero_idx]
+#energies =  energies[not_zero_idx]
 #R = au_to_ev/(energies)
 
-R = 30.493
+#R = 30.493
 
-energy = 1/R*au_to_ev
+#energy = 1/R*au_to_ev
 
 #lz = landau_zener(D2STAR_GK1SG_MS, energy, 1.646)
 
@@ -292,3 +288,42 @@ energy = 1/R*au_to_ev
 # #print(lz)
 # #fit = interp1d(R, lz,kind="linear",fill_value="extrapolate")
 # #print(fit(30)*(0.529*10**-8)**2)
+
+# R_au = 30.493
+# E_As = np.linspace(0.1,10, num=1000)
+# H_ic = H(D2STAR_GK1SG_MS, E_As, R_au)
+# lz = np.zeros(E_As.size)
+# for i in range(0, lz.size):
+#     lz[i] = landau_zener(H_ic[i], R_au)
+# plt.plot(E_As, lz)
+# plt.xlabel('E_A (eV)')
+# plt.ylabel("sigma landau zener (au) for R = 30.493 au")
+# plt.show()
+#
+# E_A = 1.646
+# R_au_s = np.linspace(0,50, num=1000)
+# H_ic = H(D2STAR_GK1SG_MS, np.array([E_A]), R_au_s)
+# lz = np.zeros(R_au_s.size)
+# for i in range(0, lz.size):
+#     lz[i] = landau_zener(H_ic[i], R_au_s[i])
+#
+# plt.plot(R_au_s, lz)
+# plt.xlabel('R (au)')
+# plt.ylabel("sigma landau zener (au) for E_A = 1.646 eV")
+# plt.show()
+
+
+
+
+#numerov_res_gk1sg = numerov(D2STAR_GK1SG_NUMEROV_PARAMS, use_cache=False)
+#numerov_res_sub = numerov(D2STAR_1_SU_B_NUMEROV_PARAMS, use_cache=False)
+#print("numeric domain of numerov started at: "+str(numerov_res.r_bohr[0])+"bohr")
+#ev = numerov_res.eigen_values
+#print("eigen_values: "+str(ev+17.93289676+14.02655))
+#numerov_res.plot()
+#Ei_minus_Ef_matrix = energy_diff_matrix(numerov_res_gk1sg, numerov_res_sub,
+#0)
+#FCM = comp_landau_zener_matrix(numerov_res_gk1sg, MolecularState(D2STAR_1_SU_B_NUMEROV_PARAMS), numerov_res_sub,
+#Ei_minus_Ef_matrix, None, 0)
+#for j in range(0,FCM[0].size):
+#    print("v'' = "+str(j)+" "+str(FCM[0][j]))
