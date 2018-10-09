@@ -111,6 +111,11 @@ proba_theo_fit = alpha*np.array(proba_theo)
 #
 plt.plot(energies, proba_exp)
 plt.plot(energies_theo, proba_theo_fit)
+plt.xlabel("Energy (eV)")
+
+frame = plt.gca()
+frame.axes.get_yaxis().set_visible(False)
+
 plt.show()
 
 

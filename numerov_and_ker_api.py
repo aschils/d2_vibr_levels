@@ -1044,7 +1044,7 @@ def comp_franck_condon_matrix(numerov_res_i, numerov_res_f, q_r = lambda r: 1):
     plt.colorbar(heatmap)
     plt.xlabel("D2(GK) vib level indices")
     plt.ylabel("D2+ vib level indices")
-    plt.savefig('plots/fcm.pdf', bbox_inches='tight')
+    plt.savefig('../plots/fcm.pdf', bbox_inches='tight')
     plt.show()
 
 

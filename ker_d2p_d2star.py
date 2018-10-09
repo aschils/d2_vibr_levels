@@ -41,6 +41,12 @@ energies = energies_exp
 events_nbr_exp = ker_exp[:,1]
 energy_shift = -0.754
 
+plt.plot(energies_exp, events_nbr_exp)
+plt.xlabel("Energy (eV)")
+frame = plt.gca()
+frame.axes.get_yaxis().set_visible(False)
+plt.show()
+
 
 # proba = comp_ker_vector(D2P_NUMEROV_PARAMS, D2STAR_GK1SG_MS,
 # only_ground_state_vib_level_distrib, energies, energy_shift)
@@ -222,16 +228,16 @@ ker_states = [(D2STAR_GK1SG_NUMEROV_PARAMS, 0.03/5, "GK1SG", 2, 0)]
 
 
 #print(ker_f)
-energy_shift = -0.754
+##energy_shift = -0.754
 #plt.plot(energies, events_nbr_exp)
-for (numerov_params, scale_coef, label, l, v) in ker_states:
-    events_nbr = comp_ker_vector(D2P_NUMEROV_PARAMS,
-    MolecularState(numerov_params), D2_plus_vib_level_distrib,
-    energies,energy_shift)*scale_coef
-    plt.plot(energies, events_nbr, label=label)
-plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
-
-plt.show()
+## for (numerov_params, scale_coef, label, l, v) in ker_states:
+##     events_nbr = comp_ker_vector(D2P_NUMEROV_PARAMS,
+##     MolecularState(numerov_params), D2_plus_vib_level_distrib,
+##     energies,energy_shift)*scale_coef
+##     plt.plot(energies, events_nbr, label=label)
+## plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
+##
+## plt.show()
 
 #essayer largeur 1, 2, 3 eV entre 0.7 et 2.7 1/e^2 largeur à mi hauter +/- 1eV
 
@@ -327,3 +333,116 @@ plt.show()
 #Ei_minus_Ef_matrix, None, 0)
 #for j in range(0,FCM[0].size):
 #    print("v'' = "+str(j)+" "+str(FCM[0][j]))
+
+
+#Find transitions responsible for right pic in experimental KER
+# v_i <-> v_f such that KER is between 1.7 and 2.4 eV
+#(f_state, v_i, v_f) <-> count
+
+def ker_find_resp_trans(E, bound_vib_level_distrib, numerov_res_i, molecular_state, numerov_res_f,
+landau_zener_matrix, Ei_minus_Ef):
+
+    (r_bohr_i, V_i, eigen_values_i, eigen_vectors_i) = (numerov_res_i.r_bohr,
+    numerov_res_i.V, numerov_res_i.eigen_values, numerov_res_i.eigen_vectors)
+    (r_bohr_f, V_f, eigen_values_f, eigen_vectors_f) = (numerov_res_f.r_bohr,
+    numerov_res_f.V, numerov_res_f.eigen_values, numerov_res_f.eigen_vectors)
+
+    ker_of_E_contrib = np.zeros((len(eigen_vectors_i), len(eigen_vectors_f)))
+    proba_v_f = bound_vib_level_distrib(eigen_values_i)
+
+    for i in range(0,len(eigen_vectors_i)):
+        for j in range(0,len(eigen_vectors_f)):
+            proba_v = proba_v_f(eigen_values_i[i])
+
+            sigma = 0.05/math.sqrt(2*math.log(2))
+
+            if Ei_minus_Ef[i,j] > 0:
+
+                ker_of_E_contrib[i,j] = proba_v* \
+                math.exp(-(E-Ei_minus_Ef[i,j])**2/(2*sigma**2))/0.106447* \
+                landau_zener_matrix[i,j]
+
+
+    return ker_of_E_contrib
+
+
+def comp_ker_vector_find_resp_trans(numerov_params_i, molecular_state_f,
+vib_level_distrib_i, energies, energy_shift=0, use_cache = True, lz_formule_id=0):
+
+    numerov_params_f = molecular_state_f.get_numerov_params()
+
+    numerov_res_i = numerov(numerov_params_i)
+    numerov_res_f = numerov(numerov_params_f)
+
+    Ei_minus_Ef_matrix = energy_diff_matrix(numerov_res_i, numerov_res_f,
+    energy_shift)
+    E_As = electron_binding_energy_of_final_state_matrix(numerov_res_i,
+    numerov_res_f)
+    landau_zener_matrix = comp_landau_zener_matrix(numerov_res_i, molecular_state_f,
+    numerov_res_f, Ei_minus_Ef_matrix, E_As, lz_formule_id)
+
+    ker_of_E_contrib = {}
+    for i in range(0,energies.size):
+        ker_of_E_contrib[energies[i]] = ker_find_resp_trans(energies[i], vib_level_distrib_i,
+        numerov_res_i, molecular_state_f, numerov_res_f, landau_zener_matrix,
+        Ei_minus_Ef_matrix)
+
+    return ker_of_E_contrib
+
+
+#
+# @Returns: the position of the N greater numbers in the matrix in descending
+# order.
+#
+# @Pre: - all matrix elements are >= 0
+#       - N < number of lines X number of columns
+#
+def x_max_idx(matrix, N):
+
+    dim = matrix.shape
+    positions = []
+
+    for i in range(0,N):
+
+        max_pos = np.argmax(matrix)
+        i = max_pos//dim[1]
+        j = max_pos%dim[1]
+        positions.append((i,j))
+        matrix[i,j] = 0
+    return positions
+
+energy_shift = -0.754
+energies = np.array([1])#np.linspace(1.5, 2.5, 10)
+#plt.plot(energies, events_nbr_exp)
+for (numerov_params, scale_coef, label, l, v) in ker_states:
+    ker_of_E_contrib = comp_ker_vector_find_resp_trans(D2P_NUMEROV_PARAMS,
+    MolecularState(numerov_params), D2_plus_vib_level_distrib,
+    energies,energy_shift)
+
+ker_of_E_contrib_matrix = ker_of_E_contrib[1]
+max_elements_pos = x_max_idx(ker_of_E_contrib_matrix, 5)
+print(max_elements_pos)
+
+
+
+
+    #print(ker_of_E_contrib)
+    #plt.plot(energies, events_nbr, label=label)
+#plt.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
+
+#plt.show()
+
+#Compute the R^2 for the various vib levels of D2+
+
+numerov_D2P = numerov(D2P_NUMEROV_PARAMS)
+D2P_ev = numerov_D2P.eigen_vectors
+r_bohr_squared_D2P = numerov_D2P.r_bohr**2
+dr = (numerov_D2P.r_bohr[1]-numerov_D2P.r_bohr[0])*bohr_to_meter
+
+Rsquared = []
+for i in range(0,len(D2P_ev)):
+
+    psi_i = D2P_ev[i]
+    #Compute <Psi | R^2 | Psi > = <R^2>
+    Rsquared.append(wave_fun_scalar_prod(psi_i*numerov_D2P.r_bohr, psi_i, dr))
+print(Rsquared)
