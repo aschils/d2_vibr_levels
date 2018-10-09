@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from numerov_and_ker_api import *
 
 ########################## BOUND state D_2^* potential ########################
