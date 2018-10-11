@@ -126,10 +126,11 @@ class NumerovResult:
         self.eigen_values = eigen_values
         self.eigen_vectors = eigen_vectors
 
-    def plot(self, r_bohr_max=float("inf"), plot_ratio=1, save=False, out_path=None):
+    def plot(self, r_bohr_max=float("inf"), plot_ratio=1, save=False, out_path=None,
+	show=True):
         r_bohr = self.r_bohr[self.r_bohr <= r_bohr_max]
         plot_wave_fun(self.eigen_vectors, self.eigen_values, r_bohr, self.V,
-        plot_ratio, save, out_path)
+        plot_ratio, save, out_path, show)
 
     def write_eigen_vector(self, path):
         of = open(path, "w")
@@ -786,13 +787,14 @@ def under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V, plot_ratio=1):
             plt.plot(r_bohr, psi[0:r_bohr.size]/np.linalg.norm(psi)*delta_E+eigen_values[i])
 
 def plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio=1,
-save=False, out_path=None):
+save=False, out_path=None, show=True):
     plt.xlabel("Bohr")
     plt.ylabel("eV")
     under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio=1)
     if save:
         plt.savefig(out_path)
-    plt.show()
+    if show:
+    	plt.show()
 
 def plot_bound_and_free(eigen_vectors_bound, eigen_values_bound, r_bohr_bound, V_bound,
 eigen_vectors_free, eigen_values_free, r_bohr_free, V_free, plot_ratio_bound=1, plot_ratio_free=1,
