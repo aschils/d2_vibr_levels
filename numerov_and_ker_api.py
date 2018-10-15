@@ -43,7 +43,7 @@ D2DISSOC_POTENTIAL_FILE = "pot_d2_b.txt"
 D2X_1SG_POTENTIAL_FILE = "d2_x_1sg.txt" #Ground state
 D2X_1SG_FREE_PART_POTENTIAL_FILE = "d2_x_1sg_free.txt"
 D2STAR_GK1SG_POTENTIAL_FILE = "gk1sg.dat"
-D2STAR_2_3SG_POTENTIAL_FILE = "2_3Sigma_g_truncat"
+D2STAR_2_3SG_POTENTIAL_FILE = "2_3Sigma_g"#_truncat"
 D2STAR_3_3SG_POTENTIAL_FILE = "3_3Sigma_g"
 D2STAR_1_SU_B_POTENTIAL_FILE = "1Sigma_u_B.txt"
 D2STAR_1_SU_BP_POTENTIAL_FILE = "1Sigma_u_Bp.txt"
@@ -107,6 +107,19 @@ class NumerovParams:
         self.pot_in_au = pot_in_au
         self.auto_E_max = auto_E_max
 
+    def plot_potential(self, r_end):
+        pot_file = np.loadtxt(POTENTIALS_DIR+"/"+self.pot_file_path)
+        r_init = pot_file[:,0]
+        r = r_init[r_init < r_end]
+        V_init = pot_file[:,1]
+        V = V_init[r_init < r_end]
+        if self.pot_in_au:
+            V = V*au_to_ev
+
+        plt.plot(r, V)
+        plt.show()
+        
+
     def to_string(self):
         return NUMEROV_SAVE_PKL_DIR+"/"+self.pot_file_path+"_" \
         +str(self.is_bound_potential)+"_"+str(self.E_max)+"_"+str(self.reduced_mass)+"_" \
@@ -127,10 +140,12 @@ class NumerovResult:
         self.eigen_vectors = eigen_vectors
 
     def plot(self, r_bohr_max=float("inf"), plot_ratio=1, save=False, out_path=None,
-	show=True):
+	show=True, figsize=(10,10), ylim=None, y_axis="energy eV", xlabel="Bohr", title=None,
+    useTex=False):
         r_bohr = self.r_bohr[self.r_bohr <= r_bohr_max]
         plot_wave_fun(self.eigen_vectors, self.eigen_values, r_bohr, self.V,
-        plot_ratio, save, out_path, show)
+        plot_ratio, save, out_path, show, figsize, ylim, y_axis, xlabel, title,
+        useTex)
 
     def write_eigen_vector(self, path):
         of = open(path, "w")
@@ -771,9 +786,10 @@ franck_condon_matrix):
 #def bound_vib_level_distrib(mol_energy):
 #    return 1/eigen_values_bound.size
 
-def under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V, plot_ratio=1):
+def under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V, plot_ratio=1,
+y_axis="energy eV"):
 
-    plt.plot(r_bohr, V(r_bohr))
+    plt.plot(r_bohr, V(r_bohr), color="black")
 
     for i in range(0, len(eigen_vectors)):
         if i%plot_ratio == 0:
@@ -786,11 +802,30 @@ def under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V, plot_ratio=1):
             delta_E = 1
             plt.plot(r_bohr, psi[0:r_bohr.size]/np.linalg.norm(psi)*delta_E+eigen_values[i])
 
+    if y_axis == "none":
+        plt.tick_params(
+            axis='y',
+            which='both',
+            left=False,
+            right=False,
+            labelleft=False)
+
 def plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio=1,
-save=False, out_path=None, show=True):
-    plt.xlabel("Bohr")
-    plt.ylabel("eV")
-    under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio=1)
+save=False, out_path=None, show=True, figsize_param=(10,10), ylim=None,
+y_axis="energy eV", xlabel="Bohr", title=None, useTex=False):
+    plt.figure(figsize=figsize_param)
+    plt.xlabel(xlabel)
+    plt.rc("text", usetex=useTex)
+    if y_axis != "none":
+        plt.ylabel("eV")
+
+    if ylim is not None:
+        plt.ylim(ylim[0],ylim[1])
+    
+    if title is not None:
+        plt.title(title)
+    
+    under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio, y_axis)
     if save:
         plt.savefig(out_path)
     if show:
