@@ -107,7 +107,7 @@ class NumerovParams:
         self.pot_in_au = pot_in_au
         self.auto_E_max = auto_E_max
 
-    def plot_potential(self, r_end):
+    def plot_potential(self, r_end, show=True, min_at_zero=False):
         pot_file = np.loadtxt(POTENTIALS_DIR+"/"+self.pot_file_path)
         r_init = pot_file[:,0]
         r = r_init[r_init < r_end]
@@ -116,8 +116,12 @@ class NumerovParams:
         if self.pot_in_au:
             V = V*au_to_ev
 
+        if min_at_zero:
+            min_V = np.min(V)
+            V = V-min_V
         plt.plot(r, V)
-        plt.show()
+        if show:
+            plt.show()
         
 
     def to_string(self):
@@ -133,11 +137,12 @@ class NumerovParams:
 
 class NumerovResult:
 
-    def __init__(self, r_bohr, V, eigen_values, eigen_vectors):
+    def __init__(self, r_bohr, V, eigen_values, eigen_vectors, min_of_V):
         self.r_bohr = r_bohr
         self.V = V
         self.eigen_values = eigen_values
         self.eigen_vectors = eigen_vectors
+        self.min_of_V = min_of_V
 
     def plot(self, r_bohr_max=float("inf"), plot_ratio=1, save=False, out_path=None,
 	show=True, figsize=(10,10), ylim=None, y_axis="energy eV", xlabel="Bohr", title=None,
@@ -155,6 +160,19 @@ class NumerovResult:
                 of.write(str(self.eigen_vectors[j][i])+" ")
             of.write("\n")
         of.close()
+
+def plot_pot_and_ev(r_bohr, V, eigen_values, min_of_V):        
+    plt.plot(r_bohr, V(r_bohr))
+    for ev in eigen_values:
+        f = lambda x: V(x)-ev    
+        V_E_intersect_left = sp.optimize.brentq(f, 0, min_of_V)
+        try:
+            V_E_intersect_right = sp.optimize.brentq(f, min_of_V, r_bohr[-1])
+        except ValueError as e:
+            V_E_intersect_right = r_bohr[-1]
+
+        plt.plot([V_E_intersect_left, V_E_intersect_right], [ev, ev], color="red")
+            
 
 class MolecularState:
 
@@ -615,7 +633,7 @@ def numerov(NumerovParams, use_cache = True):
 
     r_bohr = r/bohr_to_meter
     V = interp1d(r_init,V_init,kind="linear",fill_value="extrapolate")
-    res = NumerovResult(r_bohr, V, eigen_values, eigen_vectors)
+    res = NumerovResult(r_bohr, V, eigen_values, eigen_vectors, r_min_of_V/bohr_to_meter)
 
     #print("norm in numerov "+str(wave_fun_scalar_prod(eigen_vectors[3],
     #eigen_vectors[3], r[1]-r[0])))
