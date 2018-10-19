@@ -80,21 +80,23 @@ energies = ker_exp[:,0]
 proba_exp = ker_exp[:,1]
 energies_theo = numerov_res_D2B.eigen_values #np.linspace(0.0, 10, 200)
 energies_theo = energies_theo[energies_theo > 0.12]
-#energies_theo = energies_theo[energies_theo < 5]
+#energies_theo = energies_theo[energies_theo < 4]
 
 
 proba_exp_f = interp1d(energies,proba_exp,kind="linear",fill_value="extrapolate")
 
 
 #
-res = sp.optimize.curve_fit(ker_to_fit, (energies_theo, numerov_res_D2P,
-numerov_res_D2B, FCM), proba_exp_f(energies_theo), p0=(10e29))
+
 #res = sp.optimize.curve_fit(ker_to_fit, energies, proba_exp, p0=(35*10**8))#, 3))
 #print(res)
 #res = [(0.000146889116013, 8.00268053247)]
 #(alpha, gamma) = (222521.324352, -4455915.30647)#res[0]
 #(alpha, gamma) = res[0]
-alpha = res[0]
+
+res = sp.optimize.curve_fit(ker_to_fit, (energies_theo, numerov_res_D2P,
+numerov_res_D2B, FCM), proba_exp_f(energies_theo), p0=(10e29))
+alpha = res[0] #5.81308826e+14 
 
 print("minimum error for alpha "+str(alpha))#+" and gamma "+str(gamma))
 #print(res[1])

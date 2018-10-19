@@ -107,7 +107,7 @@ class NumerovParams:
         self.pot_in_au = pot_in_au
         self.auto_E_max = auto_E_max
 
-    def plot_potential(self, r_end, show=True, min_at_zero=False):
+    def plot_potential(self, r_end, show=True, min_at_zero=False, label=""):
         pot_file = np.loadtxt(POTENTIALS_DIR+"/"+self.pot_file_path)
         r_init = pot_file[:,0]
         r = r_init[r_init < r_end]
@@ -119,9 +119,10 @@ class NumerovParams:
         if min_at_zero:
             min_V = np.min(V)
             V = V-min_V
-        plt.plot(r, V)
+        plot_ref = plt.plot(r, V, label=label)
         if show:
             plt.show()
+        return plot_ref
         
 
     def to_string(self):
@@ -161,8 +162,8 @@ class NumerovResult:
             of.write("\n")
         of.close()
 
-def plot_pot_and_ev(r_bohr, V, eigen_values, min_of_V):        
-    plt.plot(r_bohr, V(r_bohr))
+def plot_pot_and_ev(r_bohr, V, eigen_values, min_of_V, label=""):        
+    pot_plot_ref = plt.plot(r_bohr, V(r_bohr), label=label)
     for ev in eigen_values:
         f = lambda x: V(x)-ev    
         V_E_intersect_left = sp.optimize.brentq(f, 0, min_of_V)
@@ -171,7 +172,8 @@ def plot_pot_and_ev(r_bohr, V, eigen_values, min_of_V):
         except ValueError as e:
             V_E_intersect_right = r_bohr[-1]
 
-        plt.plot([V_E_intersect_left, V_E_intersect_right], [ev, ev], color="red")
+        plt.plot([V_E_intersect_left, V_E_intersect_right], [ev, ev], color="black")
+    return pot_plot_ref
             
 
 class MolecularState:
@@ -691,14 +693,19 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E, r_bohr):
     i = np.abs(eigen_values_free-E).argmin()
     return i
 
-def q_I(delta_I_eV,bound_eval):
-    # b = 1.4
-    # ang_coef = (7.1-b)/(-5+9)
-    # if delta_I_eV < -9:
-    #     return b
-    # else:
-    #     return b+(delta_I_eV+9)*ang_coef
-    return 1/math.cosh(0.191*delta_I_eV)**2
+def q_I(delta_I_eV,bound_eval, q_I_cosh=False):
+
+    if q_I_cosh:
+        return 1/math.cosh(0.191*delta_I_eV)**2
+
+    b = 1.4
+    ang_coef = (7.1-b)/(-5+9)
+    if delta_I_eV < -9:
+        return b
+    else:
+        return b+(delta_I_eV+9)*ang_coef
+    
+    #return 1/math.cosh(0.191*delta_I_eV)**2
     #return 1/math.cosh(17.1/math.sqrt(bound_eval)*delta_I_eV)**2
 
 
@@ -710,7 +717,7 @@ def q_I(delta_I_eV,bound_eval):
 # bounded_state_IP: ionisation potential of molecule bounded state in eV
 #
 def ker_dissoc(numerov_res_bound, numerov_res_free, bound_vib_level_distrib, E,
-franck_condon_matrix):
+franck_condon_matrix, q_I_cosh=False):
 
     eigen_values_bound = numerov_res_bound.eigen_values
     eigen_vectors_bound = numerov_res_bound.eigen_vectors
@@ -788,9 +795,10 @@ franck_condon_matrix):
 
         #if (e_vec_b_f(r_star_bohr)**2) < 0.01:
         #    print(e_vec_b_f(r_star_bohr)**2)
-        p_E = p_E + proba_v*franck_condon_matrix[ev_b_idx,ev_f_idx]*q_I(delta_I_eV, e_val_b)
+        
+        p_E = p_E + proba_v*franck_condon_matrix[ev_b_idx,ev_f_idx]*q_I(delta_I_eV, e_val_b, q_I_cosh)
 
-        #p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv*q_I(delta_I_eV)
+        #p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv*q_I(delta_I_eV, e_val_b)
 
         #p_E = p_E + proba_v*e_vec_b_f(r_star_bohr)**2/V_free_deriv
 
@@ -1059,7 +1067,7 @@ def ker_to_fit(fixed_params, alpha):
         franck_condon_matrix)
     return p_e
 
-def comp_franck_condon_matrix(numerov_res_i, numerov_res_f, q_r = lambda r: 1):
+def comp_franck_condon_matrix(numerov_res_i, numerov_res_f, q_r = lambda r: 1, show=False):
 
     (r_bohr_i, V_i, eigen_values_i, eigen_vectors_i) = (numerov_res_i.r_bohr,
     numerov_res_i.V, numerov_res_i.eigen_values, numerov_res_i.eigen_vectors)
@@ -1092,16 +1100,16 @@ def comp_franck_condon_matrix(numerov_res_i, numerov_res_f, q_r = lambda r: 1):
             franck_condon_matrix[i,j] = wave_fun_scalar_prod(ev_i_data*q_r_data,
             ev_f_data, dr)**2
 
-
-    print("*********")
-    print(np.sum(franck_condon_matrix, axis=0))
-    fig, axis = plt.subplots()
-    heatmap = axis.pcolor(franck_condon_matrix)
-    plt.colorbar(heatmap)
-    plt.xlabel("D2(GK) vib level indices")
-    plt.ylabel("D2+ vib level indices")
-    plt.savefig('../plots/fcm.pdf', bbox_inches='tight')
-    plt.show()
+    if show:
+        print("*********")
+        print(np.sum(franck_condon_matrix, axis=0))
+        fig, axis = plt.subplots()
+        heatmap = axis.pcolor(franck_condon_matrix)
+        plt.colorbar(heatmap)
+        plt.xlabel("D2(GK) vib level indices")
+        plt.ylabel("D2+ vib level indices")
+        plt.savefig('../plots/fcm.pdf', bbox_inches='tight')
+        plt.show()
 
 
     return franck_condon_matrix
