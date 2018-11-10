@@ -25,6 +25,7 @@ from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
 from scipy.interpolate import interp1d
 import scipy.optimize as optimize
+import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import pickle
@@ -107,7 +108,8 @@ class NumerovParams:
         self.pot_in_au = pot_in_au
         self.auto_E_max = auto_E_max
 
-    def plot_potential(self, r_end, show=True, min_at_zero=False, label=""):
+    def plot_potential(self, r_end, show=True, min_at_zero=False, shift=0, label="",
+        color="black"):
         pot_file = np.loadtxt(POTENTIALS_DIR+"/"+self.pot_file_path)
         r_init = pot_file[:,0]
         r = r_init[r_init < r_end]
@@ -119,7 +121,8 @@ class NumerovParams:
         if min_at_zero:
             min_V = np.min(V)
             V = V-min_V
-        plot_ref = plt.plot(r, V, label=label)
+        V = V+shift
+        plot_ref = plt.plot(r, V, label=label,color=color)
         if show:
             plt.show()
         return plot_ref
@@ -147,11 +150,11 @@ class NumerovResult:
 
     def plot(self, r_bohr_max=float("inf"), plot_ratio=1, save=False, out_path=None,
 	show=True, figsize=(10,10), ylim=None, y_axis="energy eV", xlabel="Bohr", title=None,
-    useTex=False):
+    useTex=False, start_applying_plot_ratio_from_ev=-100):
         r_bohr = self.r_bohr[self.r_bohr <= r_bohr_max]
         plot_wave_fun(self.eigen_vectors, self.eigen_values, r_bohr, self.V,
         plot_ratio, save, out_path, show, figsize, ylim, y_axis, xlabel, title,
-        useTex)
+        useTex, start_applying_plot_ratio_from_ev)
 
     def write_eigen_vector(self, path):
         of = open(path, "w")
@@ -696,7 +699,9 @@ def final_dissoc_state(eigen_values_free, eigen_vectors_free, E, r_bohr):
 def q_I(delta_I_eV,bound_eval, q_I_cosh=False):
 
     if q_I_cosh:
+        #return 1/math.cosh(0.2*delta_I_eV)**2
         return 1/math.cosh(0.191*delta_I_eV)**2
+        #return 1/math.cosh(0.171*delta_I_eV)**2
 
     b = 1.4
     ang_coef = (7.1-b)/(-5+9)
@@ -813,20 +818,35 @@ franck_condon_matrix, q_I_cosh=False):
 #    return 1/eigen_values_bound.size
 
 def under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V, plot_ratio=1,
-y_axis="energy eV"):
+y_axis="energy eV", start_applying_plot_ratio_from_ev=-100):
 
-    plt.plot(r_bohr, V(r_bohr), color="black")
+    plt.plot(r_bohr, V(r_bohr), color="black", linewidth=2)
 
     for i in range(0, len(eigen_vectors)):
-        if i%plot_ratio == 0:
+        if eigen_values[i] < start_applying_plot_ratio_from_ev or i%plot_ratio == 0:
             psi = eigen_vectors[i]
-            #if i < len(eigen_vectors)-1:
-            #    delta_E = eigen_values[i+1]-eigen_values[i]
-            #else:
-            #    delta_E = V(r_bohr[0])*electron_charge/10
-            #plt.plot(r_bohr, psi**2/np.linalg.norm(psi**2)+eigen_values[i])
-            delta_E = 1
-            plt.plot(r_bohr, psi[0:r_bohr.size]/np.linalg.norm(psi)*delta_E+eigen_values[i])
+            
+            if psi[2] < 0:
+                psi = -psi
+
+            if len(eigen_values) == 1:
+                plt.plot(r_bohr, psi[0:r_bohr.size]/np.linalg.norm(psi)+eigen_values[i])
+                break
+
+            elif i < len(eigen_values)-1:
+                delta_E = eigen_values[i+1]-eigen_values[i]
+            else:
+                delta_E = eigen_values[i]-eigen_values[i-1]
+                #delta_E = V(r_bohr[0])*electron_charge/10
+            delta_E = delta_E/2.0
+
+            if eigen_values[i] >= start_applying_plot_ratio_from_ev:
+                delta_E=delta_E*plot_ratio
+
+            #delta_E = 1            
+            plt.plot(r_bohr, psi[0:r_bohr.size]/np.max(np.abs(psi))*delta_E+eigen_values[i],
+            c=matplotlib.cm.winter(float(i)/len(eigen_vectors)*0.8))
+            #plt.plot(r_bohr, psi[0:r_bohr.size]**2/np.linalg.norm(psi**2)*delta_E+eigen_values[i])
 
     if y_axis == "none":
         plt.tick_params(
@@ -838,7 +858,8 @@ y_axis="energy eV"):
 
 def plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio=1,
 save=False, out_path=None, show=True, figsize_param=(10,10), ylim=None,
-y_axis="energy eV", xlabel="Bohr", title=None, useTex=False):
+y_axis="energy eV", xlabel="Bohr", title=None, useTex=False,
+start_applying_plot_ratio_from_ev=-100):
     plt.figure(figsize=figsize_param)
     plt.xlabel(xlabel)
     plt.rc("text", usetex=useTex)
@@ -851,7 +872,8 @@ y_axis="energy eV", xlabel="Bohr", title=None, useTex=False):
     if title is not None:
         plt.title(title)
     
-    under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio, y_axis)
+    under_plot_wave_fun(eigen_vectors, eigen_values, r_bohr, V_eV, plot_ratio, y_axis,
+    start_applying_plot_ratio_from_ev)
     if save:
         plt.savefig(out_path)
     if show:
